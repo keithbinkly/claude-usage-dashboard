@@ -3,7 +3,7 @@
 A local dashboard for tracking your own Claude Code token usage. Single-file,
 stdlib-only Python. Nothing leaves your machine.
 
-![Wide dashboard layout](https://github.com/keith-gd/claude-usage-dashboard/raw/main/screenshot.png)
+![Wide dashboard layout](https://github.com/keithbinkly/claude-usage-dashboard/raw/main/screenshot.png)
 
 ---
 
@@ -31,7 +31,7 @@ stdlib-only Python. Nothing leaves your machine.
 ## Quickstart
 
 ```bash
-git clone https://github.com/keith-gd/claude-usage-dashboard
+git clone https://github.com/keithbinkly/claude-usage-dashboard
 cd claude-usage-dashboard
 
 # Generate and open the wide dashboard
