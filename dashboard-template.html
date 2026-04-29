@@ -1,0 +1,1875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Usage Monitor</title>
+<meta name="robots" content="noindex, nofollow">
+<!-- Auto-reload every 5 min to pick up fresh data from the launchd agent.
+     Matches the StartInterval in com.datacentered.claude-usage-monitor.plist. -->
+<meta http-equiv="refresh" content="300">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&f[]=satoshi@300,400,500,700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root {
+    /* Canonical data-centered.com tokens (from core.css) */
+    --bg:          #0e0d13;
+    --surface:     #1a1824;
+    --surface-2:   #222030;
+    --ink:         #f0ede6;
+    --ink-secondary: #ebe8e3;
+    --ink-muted:   #b5b0a9;
+    --ink-dim:     #7a756e;
+    --divider:     rgba(255, 255, 255, 0.06);
+    --border:      rgba(255, 255, 255, 0.08);
+    --border-accent: rgba(255, 255, 255, 0.14);
+
+    /* Font stacks (canonical) */
+    --display: 'Cabinet Grotesk', 'Sora', system-ui, sans-serif;
+    --sans:    'Satoshi', 'Source Serif 4', system-ui, sans-serif;
+    --mono:    'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+
+    /* Model / chart encodings (not palette-switched) */
+    --model-opus:   #e26a3f;
+    --model-sonnet: #82ad95;
+    --model-haiku:  #6b8ec4;
+    --warn:         #d4a34d;
+    --crit:         #d66060;
+    --link:         var(--model-sonnet);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: var(--sans);
+    line-height: 1.65;
+    font-size: 1.05rem;
+  }
+  .page { max-width: 1280px; margin: 0 auto; padding: 48px 24px 80px; }
+  .title {
+    font-family: var(--display);
+    font-size: clamp(2rem, 5vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 10px;
+  }
+  .subtitle {
+    color: var(--ink-muted);
+    max-width: 760px;
+    margin: 0 0 20px;
+    font-size: 1.05rem;
+    line-height: 1.65;
+  }
+  .subtitle code {
+    font-family: var(--mono);
+    font-size: 0.95em;
+    color: var(--ink-secondary);
+  }
+  .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--divider);
+    letter-spacing: 0.02em;
+  }
+  .meta span + span { margin-left: 18px; }
+  .takeaway {
+    font-family: var(--display);
+    font-size: clamp(1.15rem, 2.4vw, 1.4rem);
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 36px;
+    max-width: 880px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+  .takeaway em {
+    font-style: normal;
+    color: var(--model-opus);
+    font-weight: 800;
+  }
+
+  /* ── Pacing trackers (anchored window — Copilot pattern) ── */
+  .pacing-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+  }
+  .pacing-controls-label { text-transform: uppercase; }
+  .unit-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .unit-toggle button {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 6px 12px;
+    background: transparent;
+    color: var(--ink-dim);
+    border: none;
+    cursor: pointer;
+    min-height: 32px;
+    transition: color 120ms, background 120ms;
+  }
+  .unit-toggle button + button { border-left: 1px solid var(--border); }
+  .unit-toggle button:hover { color: var(--ink-muted); }
+  .unit-toggle button.active { color: var(--ink); background: var(--surface-2); }
+  .calibrate-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 2px 4px 2px 8px;
+  }
+  .calibrate-group input {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: transparent;
+    color: var(--ink);
+    border: none;
+    width: 44px;
+    text-align: right;
+    padding: 4px 0;
+  }
+  .calibrate-group input:focus { outline: 1px solid var(--border-accent); outline-offset: 2px; }
+  .calibrate-unit { color: var(--ink-dim); font-size: 11px; margin-right: 4px; }
+  .calibrate-group button {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--surface-2);
+    color: var(--ink-muted);
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    min-height: 28px;
+    letter-spacing: 0.04em;
+  }
+  .calibrate-group button:hover { color: var(--ink); }
+  .calibrate-group button + button { padding: 5px 8px; }
+  .calibrate-status {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+  }
+  .calibrate-status.active { color: var(--model-sonnet); }
+  .trend-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: transparent;
+    color: var(--ink-dim);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 4px 10px;
+    cursor: pointer;
+    min-height: 32px;
+    letter-spacing: 0.02em;
+    transition: color 120ms, background 120ms, border-color 120ms;
+  }
+  .trend-btn:hover { color: var(--ink-muted); border-color: var(--border-accent); }
+  .trend-btn.active { color: var(--ink); background: var(--surface-2); border-color: var(--border-accent); }
+  .pacing {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 56px;
+  }
+  @media (max-width: 880px) { .pacing { grid-template-columns: 1fr; gap: 40px; } }
+  .pacing-card { padding: 0; }
+  .pacing-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .pacing-head h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+    margin: 0;
+    font-weight: 400;
+  }
+  .pacing-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 2px;
+    color: var(--bg);
+    background: var(--model-sonnet);
+    letter-spacing: 0.02em;
+  }
+  .pacing-status.over  { background: var(--crit); }
+  .pacing-status.warn  { background: var(--warn); color: var(--bg); }
+  .pacing-status.under { background: var(--model-sonnet); }
+  .pacing-status.no-cap { background: var(--surface-2); color: var(--ink-muted); }
+  .pacing-big {
+    font-family: var(--mono);
+    font-size: 56px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .pacing-big .pacing-unit {
+    font-size: 14px;
+    color: var(--ink-dim);
+    font-weight: 400;
+    margin-left: 8px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .pacing-pct {
+    font-family: var(--mono);
+    margin-bottom: 8px;
+    color: var(--ink-muted);
+    font-size: 13px;
+  }
+  .pacing-pct .pct-num {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink-secondary);
+    margin-right: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pacing-pct .pct-label {
+    font-size: 11px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .pacing-sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-bottom: 14px;
+    letter-spacing: 0.02em;
+  }
+  .pacing-chart {
+    width: 100%;
+    height: 180px;
+    margin-bottom: 10px;
+  }
+  @media (max-width: 480px) { .pacing-chart { height: 150px; } }
+  .pacing-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Rolling-window gauges (the headline) ── */
+  /* Gestalt: no background, no border, no radius. Proximity + typography
+     + the progress bar itself carry the visual grouping. Gauges separated
+     by grid gap. */
+  .gauges {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 720px) { .gauges { grid-template-columns: 1fr; gap: 32px; } }
+  .gauge { padding: 0; }
+  .gauge h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+    margin: 0 0 10px;
+    font-weight: 400;
+  }
+  .gauge .big {
+    font-family: var(--mono);
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .gauge .big .unit {
+    font-size: 13px;
+    color: var(--ink-dim);
+    font-weight: 400;
+    margin-left: 4px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .gauge .sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 6px;
+  }
+  .bar {
+    margin-top: 14px;
+    height: 6px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar .fill {
+    height: 100%;
+    background: var(--model-sonnet);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .bar .fill.warn { background: var(--warn); }
+  .bar .fill.hot  { background: var(--model-opus); }
+  .bar .fill.crit { background: var(--crit); }
+  .bar .cap-marker {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background: var(--crit);
+  }
+  .gauge .cap-line {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .gauge .cap-line a { color: var(--link); text-decoration: none; cursor: pointer; }
+  .gauge .cap-line a:hover { text-decoration: underline; }
+
+  /* ── KPI row (Gestalt — no chrome, proximity grouping) ── */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 32px 28px;
+    margin-bottom: 56px;
+  }
+  .kpi { padding: 0; }
+  .kpi .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+    font-weight: 400;
+  }
+  .kpi .value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    margin: 4px 0;
+  }
+  .kpi .sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* ── Chart blocks ── */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+    align-items: center;
+  }
+  .controls strong { font-weight: 500; letter-spacing: 0.02em; }
+  .controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 4px 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .controls input[type="checkbox"] { width: 16px; height: 16px; }
+  .controls input[type="checkbox"] { accent-color: var(--model-sonnet); }
+  .controls .dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  }
+  /* Chart heights: clamp with dvh for iOS Safari toolbar handling */
+  .chart {
+    width: 100%;
+    height: clamp(320px, 55dvh, 560px);
+    /* vh fallback for browsers without dvh */
+    height: clamp(320px, 55vh, 560px);
+    margin-bottom: 8px;
+    touch-action: manipulation;
+  }
+  #scatter { height: clamp(360px, 60dvh, 560px); height: clamp(360px, 60vh, 560px); }
+  #hourly  { height: clamp(300px, 50dvh, 480px); height: clamp(300px, 50vh, 480px); }
+  @media (max-width: 480px) {
+    #scatter { height: clamp(300px, 70dvh, 420px); height: clamp(300px, 70vh, 420px); }
+    #hourly  { height: clamp(260px, 55dvh, 360px); height: clamp(260px, 55vh, 360px); }
+  }
+  .hint {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 12px;
+    letter-spacing: 0.02em;
+  }
+  h2 {
+    font-family: var(--display);
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin: 48px 0 8px;
+    color: var(--ink);
+  }
+  p.section {
+    margin: 0 0 16px;
+    color: var(--ink-muted);
+    max-width: 820px;
+    font-size: 1.05rem;
+    line-height: 1.65;
+  }
+  p.section strong { color: var(--ink); font-weight: 700; }
+  /* Throttle panel — section separator only, no container chrome */
+  .throttle-panel {
+    border-top: 1px solid var(--divider);
+    padding: 20px 0 0;
+    margin: 8px 0 56px;
+    font-family: var(--sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    max-width: 820px;
+  }
+  .throttle-panel h4 {
+    margin: 0 0 12px;
+    color: var(--ink);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: var(--mono);
+    font-weight: 400;
+  }
+  .throttle-panel .actions a {
+    color: var(--link);
+    cursor: pointer;
+    text-decoration: none;
+    margin-right: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .throttle-panel .actions a:hover { text-decoration: underline; }
+  .throttle-list { margin: 10px 0 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 12px; }
+  .throttle-list li {
+    color: var(--ink-muted);
+    padding: 6px 0;
+    border-top: 1px dashed var(--divider);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .throttle-list li .del { cursor: pointer; color: var(--crit); }
+  .footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--divider);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+  }
+  .footer a { color: var(--link); text-decoration: none; }
+  .footer code { font-family: var(--mono); color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="title">Claude Usage Monitor</h1>
+  <p class="subtitle">
+    Your Claude Code usage over the last <span id="meta-days">—</span> days,
+    generated locally from <code>~/.claude/projects</code>. The rolling 5-hour
+    and 7-day windows track how close each session puts you to your cap.
+  </p>
+  <div class="meta">
+    <span id="meta-generated">generated: —</span>
+    <span id="meta-range">range: —</span>
+    <span id="meta-count">turns: —</span>
+  </div>
+  <p class="takeaway" id="hero-takeaway">—</p>
+
+  <!-- ── Pacing trackers (anchored windows — the headline view) ── -->
+  <div class="pacing-controls">
+    <span class="pacing-controls-label">show big number as</span>
+    <div class="unit-toggle" role="tablist" aria-label="Display unit">
+      <button data-unit="usd" class="active" role="tab" aria-selected="true">USD</button>
+      <button data-unit="tokens" role="tab" aria-selected="false">tokens</button>
+    </div>
+    <span class="pacing-controls-label" style="margin-left:18px">calibrate from /usage</span>
+    <div class="calibrate-group">
+      <input type="number" id="calibrate-input" min="0" max="100" step="1" placeholder="41" inputmode="numeric">
+      <span class="calibrate-unit">%</span>
+      <button id="calibrate-apply" type="button">apply</button>
+      <button id="calibrate-clear" type="button" title="clear calibration" aria-label="clear">×</button>
+    </div>
+    <span class="calibrate-status" id="calibrate-status"></span>
+  </div>
+  <div class="pacing">
+    <div class="pacing-card" id="pacing-5h">
+      <div class="pacing-head">
+        <h3>5-hour window · anchored</h3>
+        <span class="pacing-status" id="p5h-status">—</span>
+      </div>
+      <div class="pacing-big">
+        <span id="p5h-big">—</span>
+        <span class="pacing-unit" id="p5h-bigunit">spent</span>
+      </div>
+      <div class="pacing-pct">
+        <span class="pct-num" id="p5h-pct">—</span>
+        <span class="pct-label">of cap used</span>
+      </div>
+      <div class="pacing-sub" id="p5h-sub">—</div>
+      <div class="pacing-chart" id="p5h-chart"></div>
+      <div class="pacing-meta" id="p5h-meta">—</div>
+    </div>
+    <div class="pacing-card" id="pacing-week">
+      <div class="pacing-head">
+        <h3>7-day window · anchored</h3>
+        <span class="pacing-status" id="pw-status">—</span>
+      </div>
+      <div class="pacing-big">
+        <span id="pw-big">—</span>
+        <span class="pacing-unit" id="pw-bigunit">spent</span>
+      </div>
+      <div class="pacing-pct">
+        <span class="pct-num" id="pw-pct">—</span>
+        <span class="pct-label">of cap used</span>
+      </div>
+      <div class="pacing-sub" id="pw-sub">—</div>
+      <div class="pacing-chart" id="pw-chart"></div>
+      <div class="pacing-meta" id="pw-meta">—</div>
+    </div>
+  </div>
+
+  <!-- ── Rolling-window gauges (sliding — kept below for comparison) ── -->
+  <div class="gauges">
+    <div class="gauge" id="gauge-5h">
+      <h3>Rolling 5-hour window</h3>
+      <div class="big"><span id="g5h-cost">—</span><span class="unit">USD</span></div>
+      <div class="sub" id="g5h-sub">— tokens · — turns</div>
+      <div class="bar"><div class="fill" id="g5h-fill" style="width:0%"></div><div class="cap-marker" id="g5h-cap" style="display:none"></div></div>
+      <div class="cap-line">
+        <span id="g5h-pct">—</span>
+        <span id="g5h-cap-label">cap: not set · <a data-action="cap-5h">set from observed peak</a></span>
+      </div>
+    </div>
+    <div class="gauge" id="gauge-week">
+      <h3>Rolling 7-day window</h3>
+      <div class="big"><span id="gw-cost">—</span><span class="unit">USD</span></div>
+      <div class="sub" id="gw-sub">— tokens · — turns · since <span id="gw-since">—</span></div>
+      <div class="bar"><div class="fill" id="gw-fill" style="width:0%"></div><div class="cap-marker" id="gw-cap" style="display:none"></div></div>
+      <div class="cap-line">
+        <span id="gw-pct">—</span>
+        <span id="gw-cap-label">cap: not set · <a data-action="cap-week">set from observed peak</a></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI row ── -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- ── Throttle marker panel ── -->
+  <div class="throttle-panel">
+    <h4>Throttle markers</h4>
+    <div style="color:var(--ink-dim)">
+      When you get rate-limited, click the corresponding point in the scatter below.
+      Once marked, the minimum cost across your throttle events replaces the
+      observed-peak estimate as the gauge cap — so future readings show % of a
+      cap you've actually hit, not a guess.
+    </div>
+    <div class="actions" style="margin-top:10px">
+      <a data-action="throttle-now">mark right now</a>
+      <a data-action="throttle-clear">clear all</a>
+    </div>
+    <ul class="throttle-list" id="throttle-list"></ul>
+  </div>
+
+  <!-- ── Per-turn scatter ── -->
+  <h2 id="scatter-title">Per-turn context</h2>
+  <p class="section" id="scatter-desc">
+    <strong>Every assistant turn, plotted by time and context size.</strong>
+    Y is the context visible to the model (cache_read + cache_write + input).
+    Sidechain turns (subagents) are drawn smaller and dimmer so they don't
+    dominate the eye.
+  </p>
+  <div class="controls">
+    <strong style="color:var(--ink)">models:</strong>
+    <label><input type="checkbox" data-toggle="opus" checked> <span class="dot" style="background:#e26a3f"></span>opus</label>
+    <label><input type="checkbox" data-toggle="sonnet" checked> <span class="dot" style="background:#82ad95"></span>sonnet</label>
+    <label><input type="checkbox" data-toggle="haiku" checked> <span class="dot" style="background:#6b8ec4"></span>haiku</label>
+    <span style="color:var(--divider)">|</span>
+    <label><input type="checkbox" id="toggle-side" checked> include sidechains</label>
+    <label><input type="checkbox" id="toggle-headless" checked> include headless</label>
+  </div>
+  <div class="hint">scroll or drag the bottom bar to zoom · click any point to mark a throttle event</div>
+  <div class="chart" id="scatter"></div>
+
+  <!-- ── Hourly rollup ── -->
+  <h2 id="hourly-title">Hourly rollup</h2>
+  <p class="section">
+    <strong>Turns per hour (bars, right axis) and rolling context average (lines).</strong>
+    The thin line is the raw hourly average; the thick line is a 24-hour rolling
+    average that flattens session churn into a trend. Headless and sidechain
+    turns are excluded.
+  </p>
+  <div class="chart" id="hourly" style="height:460px"></div>
+
+  <!-- ── Daily trends from full history ── -->
+  <h2 id="trends-title">Daily trends · full history</h2>
+  <p class="section">
+    <strong>Where did the cost come from?</strong>
+    Per-day aggregates from your entire <code>~/.claude/projects</code> archive,
+    not just the <span id="trends-lookback">21</span>-day dashboard window.
+    Use the metric switcher to spot inflection points — a sustained climb in
+    <em>tokens per turn</em> usually means sessions are accumulating more
+    context; a drop in <em>cache hit rate</em> means turns are paying full
+    re-cache cost; a rising <em>opus share</em> moves the cost-per-token
+    multiplier 5× upward.
+  </p>
+  <div class="controls" id="trend-controls">
+    <strong style="color:var(--ink)">metric:</strong>
+    <button class="trend-btn active" data-metric="tokens_per_turn">tokens/turn</button>
+    <button class="trend-btn" data-metric="cost_per_turn">cost/turn</button>
+    <button class="trend-btn" data-metric="cost">total cost</button>
+    <button class="trend-btn" data-metric="avg_ctx">avg ctx</button>
+    <button class="trend-btn" data-metric="cache_hit_rate">cache hit %</button>
+    <button class="trend-btn" data-metric="opus_share">opus share</button>
+    <button class="trend-btn" data-metric="turns">turns/day</button>
+  </div>
+  <div class="chart" id="trends" style="height:380px"></div>
+  <div class="hint" id="trends-hint">— days of history</div>
+
+  <div class="footer">
+    Generated by <code>claude_usage.py</code> — data never leaves your machine ·
+    <a href="https://data-centered.com/tools/claude-usage-monitor/">tool page</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>window.__USAGE__ = {};</script>
+<script>
+(function(){
+  const DATA = window.__USAGE__ || { turns: [] };
+  const turns = DATA.turns || [];
+
+  // ─── ECharts color + font tokens (mirror CSS custom properties) ───
+  // ECharts config is JS-only, so we mirror the canonical tokens here.
+  // Keep in sync with :root in the <style> block above.
+  const T = {
+    ink:       '#f0ede6',
+    inkMuted:  '#b5b0a9',
+    inkDim:    '#7a756e',
+    surface:   '#1a1824',
+    surface2:  '#222030',
+    divider:   'rgba(255,255,255,0.06)',
+    border:    'rgba(255,255,255,0.08)',
+    bgTooltip: 'rgba(14,13,19,0.95)',
+    opus:      '#e26a3f',
+    sonnet:    '#82ad95',
+    haiku:     '#6b8ec4',
+    warn:      '#d4a34d',
+    crit:      '#d66060',
+    mono:      "'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace",
+    sans:      "'Satoshi', system-ui, sans-serif",
+  };
+  const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ─── Formatters ─────────────────────────────────────────────────────
+  const fmtDate = new Intl.DateTimeFormat('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  const fmtDay  = new Intl.DateTimeFormat('en-US', { month:'short', day:'numeric' });
+  function fmtNum(n) {
+    if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+    if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n/1e3).toFixed(0) + 'k';
+    return String(Math.round(n));
+  }
+  function fmtUsd(n) {
+    if (n >= 1000) return '$' + (n/1000).toFixed(1) + 'k';
+    if (n >= 100) return '$' + n.toFixed(0);
+    if (n >= 10) return '$' + n.toFixed(1);
+    return '$' + n.toFixed(2);
+  }
+
+  // ─── Meta ───────────────────────────────────────────────────────────
+  document.getElementById('meta-days').textContent = DATA.lookback_days || '—';
+  const lbEl = document.getElementById('trends-lookback');
+  if (lbEl) lbEl.textContent = DATA.lookback_days || '—';
+  document.getElementById('meta-generated').textContent = 'generated: ' + (DATA.generated_at || '').slice(0,16).replace('T',' ');
+  document.getElementById('meta-count').textContent = 'turns: ' + turns.length.toLocaleString();
+  if (turns.length) {
+    document.getElementById('meta-range').textContent =
+      'range: ' + fmtDay.format(new Date(DATA.first_ms)) + ' → ' + fmtDay.format(new Date(DATA.last_ms));
+  }
+
+  // ─── Throttle marker storage (localStorage) ─────────────────────────
+  const STORAGE_KEY = 'claude-usage-throttles-v1';
+  function loadThrottles() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function saveThrottles(arr) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  }
+  let throttles = loadThrottles();  // array of { ts, window: '5h'|'week', cost, tokens }
+
+  // ─── Window aggregation ─────────────────────────────────────────────
+  // 5-hour rolling window = last 5 hours from now
+  // 7-day rolling window = last 7 days from now (NOT the Thu 21:00 PT boundary —
+  //   simpler and more predictable for users without insider knowledge)
+  const now = Date.now();
+  const FIVE_HRS = 5 * 3600 * 1000;
+  const SEVEN_DAYS = 7 * 86400 * 1000;
+
+  function aggregate(windowMs) {
+    const cutoff = now - windowMs;
+    let cost = 0, inp = 0, outp = 0, cr = 0, cw = 0, n = 0;
+    for (const t of turns) {
+      if (t.ts < cutoff) continue;
+      cost += t.c || 0;
+      inp += t.in || 0;
+      outp += t.out || 0;
+      cr += t.cr || 0;
+      cw += t.cw || 0;
+      n += 1;
+    }
+    return { cost, tokens: inp + outp + cr + cw, turns: n, in: inp, out: outp, cr, cw };
+  }
+
+  const agg5h = aggregate(FIVE_HRS);
+  const aggWk = aggregate(SEVEN_DAYS);
+
+  // ─── Observed peak for auto-cap ────────────────────────────────────
+  // Walk every possible rolling window of the given length and find the max
+  // total cost. We deliberately exclude any peak whose end-time is inside the
+  // CURRENT window — otherwise the current-window cost gets compared against
+  // itself and always reads 100%. A peak is only a useful cap estimate if it
+  // happened long enough ago to be a distinct event.
+  function observedPeak(windowMs) {
+    if (!turns.length) return { cost: 0, ts: 0 };
+    const excludeAfter = now - windowMs;  // peak must end before this
+    let maxCost = 0, maxTs = 0;
+    let j = 0;
+    let costSum = 0;
+    for (let i = 0; i < turns.length; i++) {
+      costSum += turns[i].c || 0;
+      while (j <= i && turns[i].ts - turns[j].ts > windowMs) {
+        costSum -= turns[j].c || 0;
+        j += 1;
+      }
+      if (turns[i].ts > excludeAfter) continue;  // overlaps current window
+      if (costSum > maxCost) { maxCost = costSum; maxTs = turns[i].ts; }
+    }
+    return { cost: maxCost, ts: maxTs };
+  }
+  const peak5h = observedPeak(FIVE_HRS);
+  const peakWk = observedPeak(SEVEN_DAYS);
+
+  // ─── Anchored windows (the real Claude Code rate-limit model) ──────
+  // The Python script walks the FULL JSONL history (no lookback cutoff) to
+  // find every anchored window. Each entry is {anchor, end, cost, tokens, n}.
+  const anchored5h = (DATA.anchored_5h || []).map(w => ({
+    anchor: w.anchor, end: w.end, cost: w.cost, tokens: w.tokens || 0, n: w.n,
+    turns: turns.filter(t => t.ts >= w.anchor && t.ts < w.end),
+  }));
+  const anchoredWk = (DATA.anchored_7d || []).map(w => ({
+    anchor: w.anchor, end: w.end, cost: w.cost, tokens: w.tokens || 0, n: w.n,
+    turns: turns.filter(t => t.ts >= w.anchor && t.ts < w.end),
+  }));
+
+  // Cap estimate: the highest cost / token total across PAST anchored windows
+  // (excluding the in-progress current one). This is the most we've made it
+  // through without hitting Anthropic's enforced cap — a conservative lower
+  // bound on the real limit. When Keith marks a real throttle event, that
+  // overrides this estimate.
+  function capEstimate(wins, key) {
+    let max = 0;
+    const last = wins[wins.length - 1];
+    for (const w of wins) {
+      if (w === last && now < w.end) continue;
+      if ((w[key] || 0) > max) max = w[key] || 0;
+    }
+    return max;
+  }
+  const cap5hUsdObserved  = capEstimate(anchored5h, 'cost');
+  const cap5hTokObserved  = capEstimate(anchored5h, 'tokens');
+  const capWkUsdObserved  = capEstimate(anchoredWk, 'cost');
+  const capWkTokObserved  = capEstimate(anchoredWk, 'tokens');
+
+  // ─── Calibration override (from /usage reading) ───────────────────
+  // When the user checks `/usage` in Claude Code and enters the %, we
+  // back-calculate the actual cap from their current spend and store it.
+  // This overrides the observed-peak estimate (which drifts as Anthropic
+  // tightens enforcement over time).
+  const CAL_KEY = 'claude-usage-calibration-v1';
+  function loadCalibration() {
+    try { return JSON.parse(localStorage.getItem(CAL_KEY) || 'null'); }
+    catch { return null; }
+  }
+  function saveCalibration(obj) {
+    if (obj) localStorage.setItem(CAL_KEY, JSON.stringify(obj));
+    else localStorage.removeItem(CAL_KEY);
+  }
+
+  // Effective caps = observed-peak by default, overridden by calibration.
+  // The ratio (cal_pct → implied_cap) applies to both USD and tokens since
+  // tokens and cost scale together within a window.
+  function effectiveCaps() {
+    const cal = loadCalibration();
+    const curWk = anchoredWk[anchoredWk.length - 1];
+    if (!cal || !curWk || !curWk.cost) {
+      return {
+        cap5hUsd: cap5hUsdObserved, cap5hTok: cap5hTokObserved,
+        capWkUsd: capWkUsdObserved, capWkTok: capWkTokObserved,
+        calibrated: false,
+      };
+    }
+    // Calibration: at `cal.pct`% used, we had `cal.costAtCal` spent.
+    // Implied cap = costAtCal / (pct/100)
+    const impliedWkUsd = cal.costAtCal / (cal.pct / 100);
+    const impliedWkTok = cal.tokensAtCal / (cal.pct / 100);
+    return {
+      cap5hUsd: cap5hUsdObserved,
+      cap5hTok: cap5hTokObserved,
+      capWkUsd: impliedWkUsd,
+      capWkTok: impliedWkTok,
+      calibrated: true,
+      cal,
+    };
+  }
+
+  function updateCalibrationUI() {
+    const cal = loadCalibration();
+    const statusEl = document.getElementById('calibrate-status');
+    const inputEl = document.getElementById('calibrate-input');
+    if (cal) {
+      const ts = new Date(cal.ts);
+      const calAge = Math.floor((now - cal.ts) / 60000);
+      const ageStr = calAge < 60 ? calAge + 'm ago'
+                   : calAge < 1440 ? Math.floor(calAge/60) + 'h ago'
+                   : Math.floor(calAge/1440) + 'd ago';
+      statusEl.textContent = `calibrated: ${cal.pct}% at ${ts.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} (${ageStr})`;
+      statusEl.className = 'calibrate-status active';
+      inputEl.value = cal.pct;
+    } else {
+      statusEl.textContent = 'no calibration — using observed-peak estimate';
+      statusEl.className = 'calibrate-status';
+      inputEl.value = '';
+    }
+  }
+
+  // ─── Pacing tracker rendering (Copilot pattern) ─────────────────────
+  function fmtDuration(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      return d + 'd ' + (h % 24) + 'h';
+    }
+    if (h >= 1) return h + 'h ' + (m % 60).toString().padStart(2,'0') + 'm';
+    return m + 'm';
+  }
+  function fmtClock(ts) {
+    return new Intl.DateTimeFormat('en-US', { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }).format(new Date(ts));
+  }
+
+  // Current display unit, toggleable via .unit-toggle buttons
+  let UNIT = 'usd';  // 'usd' | 'tokens'
+
+  function renderPacing(prefix, windowMs, wins, capUsd, capTok, label) {
+    const last = wins[wins.length - 1];
+    const ids = {
+      status: prefix + '-status',
+      big:    prefix + '-big',
+      bigunit:prefix + '-bigunit',
+      pct:    prefix + '-pct',
+      sub:    prefix + '-sub',
+      meta:   prefix + '-meta',
+      chart:  prefix + '-chart',
+    };
+    const $ = id => document.getElementById(id);
+
+    if (!last) {
+      $(ids.big).textContent = '—';
+      $(ids.sub).textContent = 'no usage data';
+      $(ids.meta).textContent = '';
+      $(ids.pct).textContent = '—';
+      $(ids.status).textContent = 'no data';
+      $(ids.status).className = 'pacing-status no-cap';
+      return null;
+    }
+
+    const active = now < last.end;
+    const win = last;
+    const elapsed = active ? (now - win.anchor) : windowMs;
+    const remaining = active ? (win.end - now) : 0;
+    const pctTime = (elapsed / windowMs) * 100;
+    const costUsd = win.cost;
+    const costTok = win.tokens || 0;
+
+    // Compute % once — same denominator regardless of unit
+    // (use USD as the canonical measure since that's the cap proxy)
+    const pctUsed = capUsd > 0 ? Math.min(100, (costUsd / capUsd) * 100) : 0;
+
+    // Pace baseline at "now": where you SHOULD be if spending evenly
+    const expectedUsd = active ? (capUsd * (elapsed / windowMs)) : 0;
+    const expectedTok = active ? (capTok * (elapsed / windowMs)) : 0;
+    const deltaUsd = costUsd - expectedUsd;
+    const deltaTok = costTok - expectedTok;
+    const onPace  = capUsd === 0 ? null : (Math.abs(deltaUsd) < capUsd * 0.05);
+    const overPace = capUsd > 0 && deltaUsd >= capUsd * 0.05;
+    const underPace = capUsd > 0 && deltaUsd <= -capUsd * 0.05;
+
+    // ── Render unit-dependent numbers ──
+    function renderUnit() {
+      const isUsd = UNIT === 'usd';
+      const cost = isUsd ? costUsd : costTok;
+      const cap = isUsd ? capUsd : capTok;
+      const fmt = isUsd ? fmtUsd : fmtNum;
+      const left = Math.max(0, cap - cost);
+      const delta = isUsd ? deltaUsd : deltaTok;
+
+      $(ids.big).textContent = fmt(cost);
+      $(ids.bigunit).textContent = isUsd ? 'spent' : 'tokens spent';
+
+      $(ids.pct).textContent = capUsd > 0 ? pctUsed.toFixed(0) + '%' : '—';
+
+      if (cap > 0) {
+        $(ids.sub).innerHTML =
+          `<b style="color:var(--ink-secondary)">${fmt(left)}</b> left of ` +
+          `<b style="color:var(--ink-secondary)">${fmt(cap)}</b> cap`;
+      } else {
+        $(ids.sub).innerHTML =
+          `${fmt(cost)} so far · cap not yet calibrated`;
+      }
+
+      // Status pill
+      const statusEl = $(ids.status);
+      if (!active) {
+        statusEl.textContent = 'expired';
+        statusEl.className = 'pacing-status no-cap';
+      } else if (cap === 0) {
+        statusEl.textContent = 'no cap yet';
+        statusEl.className = 'pacing-status no-cap';
+      } else if (underPace) {
+        statusEl.textContent = fmt(Math.abs(delta)) + ' under pace';
+        statusEl.className = 'pacing-status under';
+      } else if (onPace) {
+        statusEl.textContent = 'on pace';
+        statusEl.className = 'pacing-status warn';
+      } else {
+        statusEl.textContent = fmt(delta) + ' over pace';
+        statusEl.className = 'pacing-status over';
+      }
+    }
+    renderUnit();
+    // Stash the renderer so the toggle handler can call it
+    if (!window.__pacingRenderers) window.__pacingRenderers = [];
+    window.__pacingRenderers.push(renderUnit);
+
+    // Meta line (independent of unit)
+    if (active) {
+      $(ids.meta).innerHTML =
+        `anchor: <b style="color:var(--ink-muted)">${fmtClock(win.anchor)}</b> · ` +
+        `ends: <b style="color:var(--ink-muted)">${fmtClock(win.end)}</b> · ` +
+        `${fmtDuration(remaining)} remaining (${pctTime.toFixed(0)}% through)`;
+    } else {
+      $(ids.meta).innerHTML =
+        `last window: ${fmtClock(win.anchor)} → ${fmtClock(win.end)} · ` +
+        `${fmtDuration(now - win.end)} ago. Next message starts a new window.`;
+    }
+
+    // ─── Chart: USD only (one source of truth) ───
+    const cumPts = [];
+    let running = 0;
+    cumPts.push([win.anchor, 0]);
+    for (const t of win.turns) {
+      running += t.c || 0;
+      cumPts.push([t.ts, running]);
+    }
+    if (active) cumPts.push([now, running]);
+
+    const paceLine = capUsd > 0 ? [[win.anchor, 0], [win.end, capUsd]] : [];
+    const cap = capUsd;  // chart axis stays in USD
+    const cost = costUsd;
+    const delta = deltaUsd;
+
+    const chart = echarts.init(document.getElementById(ids.chart), null, {
+      renderer: 'svg',
+      useCoarsePointer: true,
+      pointerSize: 32,
+    });
+    const fillColor = underPace ? T.sonnet : onPace ? T.warn : T.crit;
+
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: !REDUCED_MOTION,
+      animationDuration: REDUCED_MOTION ? 0 : 400,
+      aria: { enabled: true, decal: { show: true } },
+      grid: { left: 56, right: 16, top: 14, bottom: 28 },
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        backgroundColor: T.bgTooltip,
+        borderColor: T.border, borderWidth: 1,
+        textStyle: { color: T.ink, fontFamily: T.mono, fontSize: 11 },
+        formatter: params => {
+          if (!params || !params.length) return '';
+          const ts = params[0].data[0];
+          const lines = ['<div style="font-weight:700;color:#fff">' + fmtClock(ts) + '</div>'];
+          for (const p of params) {
+            if (p.data[1] == null) continue;
+            lines.push(p.marker + p.seriesName + ': <b>' + fmtUsd(p.data[1]) + '</b>');
+          }
+          return lines.join('<br>');
+        },
+      },
+      xAxis: {
+        type: 'time',
+        min: win.anchor,
+        max: win.end,
+        axisLine: { lineStyle: { color: T.border } },
+        axisLabel: { color: T.inkDim, fontFamily: T.mono, fontSize: 10, hideOverlap: true },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: cap > 0 ? cap * 1.05 : undefined,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: T.inkDim, fontFamily: T.mono, fontSize: 10, formatter: v => fmtUsd(v) },
+        splitLine: { lineStyle: { color: T.divider } },
+      },
+      series: [
+        // Pace baseline (dashed)
+        cap > 0 ? {
+          name: 'pace',
+          type: 'line',
+          data: paceLine,
+          showSymbol: false,
+          lineStyle: { color: T.inkDim, width: 1, type: 'dashed' },
+          z: 1,
+        } : null,
+        // Actual cumulative cost (solid, filled)
+        {
+          name: 'spent',
+          type: 'line',
+          data: cumPts,
+          showSymbol: false,
+          step: 'end',
+          lineStyle: { color: fillColor, width: 2 },
+          areaStyle: { color: fillColor, opacity: 0.12 },
+          z: 2,
+          markPoint: active ? {
+            symbol: 'circle',
+            symbolSize: 8,
+            itemStyle: { color: fillColor, borderColor: T.bg, borderWidth: 2 },
+            label: { show: false },
+            data: [{ coord: [now, running] }],
+          } : undefined,
+          markLine: cap > 0 ? {
+            silent: true,
+            symbol: 'none',
+            lineStyle: { color: T.crit, type: 'dotted', width: 1 },
+            label: { color: T.crit, fontFamily: T.mono, fontSize: 9, position: 'insideStartTop', formatter: 'cap' },
+            data: [{ yAxis: cap }],
+          } : undefined,
+        },
+      ].filter(Boolean),
+    });
+    return chart;
+  }
+
+  // Initial render with current effective caps
+  let eff = effectiveCaps();
+  let p5hChart = renderPacing('p5h', FIVE_HRS,   anchored5h, eff.cap5hUsd, eff.cap5hTok, '5-hour');
+  let pwChart  = renderPacing('pw',  SEVEN_DAYS, anchoredWk, eff.capWkUsd, eff.capWkTok, '7-day');
+  updateCalibrationUI();
+
+  function rerenderPacing() {
+    // Clear stashed renderers, blow away chart instances, rebuild.
+    window.__pacingRenderers = [];
+    if (p5hChart) { p5hChart.dispose(); }
+    if (pwChart)  { pwChart.dispose(); }
+    eff = effectiveCaps();
+    p5hChart = renderPacing('p5h', FIVE_HRS,   anchored5h, eff.cap5hUsd, eff.cap5hTok, '5-hour');
+    pwChart  = renderPacing('pw',  SEVEN_DAYS, anchoredWk, eff.capWkUsd, eff.capWkTok, '7-day');
+    if (p5hChart) hookResize(p5hChart, document.getElementById('p5h-chart'));
+    if (pwChart)  hookResize(pwChart,  document.getElementById('pw-chart'));
+    updateCalibrationUI();
+  }
+
+  // Calibration button handlers
+  document.getElementById('calibrate-apply').addEventListener('click', () => {
+    const input = document.getElementById('calibrate-input');
+    const pct = parseFloat(input.value);
+    if (!pct || pct <= 0 || pct > 100) return;
+    const curWk = anchoredWk[anchoredWk.length - 1];
+    if (!curWk || !curWk.cost) return;
+    saveCalibration({
+      pct: pct,
+      costAtCal: curWk.cost,
+      tokensAtCal: curWk.tokens || 0,
+      ts: now,
+    });
+    rerenderPacing();
+  });
+  document.getElementById('calibrate-clear').addEventListener('click', () => {
+    saveCalibration(null);
+    rerenderPacing();
+  });
+  document.getElementById('calibrate-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') document.getElementById('calibrate-apply').click();
+  });
+
+  // Unit toggle wiring
+  document.querySelectorAll('.unit-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unit = btn.dataset.unit;
+      if (UNIT === unit) return;
+      UNIT = unit;
+      document.querySelectorAll('.unit-toggle button').forEach(b => {
+        const active = b.dataset.unit === unit;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      (window.__pacingRenderers || []).forEach(fn => fn());
+    });
+  });
+
+  // ─── Gauge rendering ───────────────────────────────────────────────
+  function capFor(windowKey) {
+    // Throttle markers take priority; fall back to observed peak; fall back to 2x current.
+    const matching = throttles.filter(t => t.window === windowKey);
+    if (matching.length) {
+      return { cost: Math.min(...matching.map(t => t.cost)), source: 'throttle' };
+    }
+    const peak = windowKey === '5h' ? peak5h : peakWk;
+    if (peak.cost > 0) return { cost: peak.cost, source: 'peak' };
+    return { cost: 0, source: 'none' };
+  }
+
+  function renderGauge(prefix, agg, windowKey) {
+    const cap = capFor(windowKey);
+    const pct = cap.cost > 0 ? Math.min(100, 100 * agg.cost / cap.cost) : 0;
+
+    document.getElementById(prefix + '-cost').textContent = fmtUsd(agg.cost);
+    document.getElementById(prefix + '-sub').innerHTML =
+      fmtNum(agg.tokens) + ' tokens · ' + agg.turns + ' turns' +
+      (windowKey === 'week' ? ' · since <span id="gw-since">' + fmtDay.format(new Date(now - SEVEN_DAYS)) + '</span>' : '');
+
+    const fill = document.getElementById(prefix + '-fill');
+    fill.style.width = pct + '%';
+    fill.className = 'fill' + (pct > 90 ? ' crit' : pct > 75 ? ' hot' : pct > 50 ? ' warn' : '');
+
+    const pctEl = document.getElementById(prefix + '-pct');
+    const lblEl = document.getElementById(prefix + '-cap-label');
+    if (cap.cost > 0) {
+      pctEl.textContent = pct.toFixed(0) + '% of ' + fmtUsd(cap.cost) + ' cap';
+      lblEl.innerHTML = 'cap source: ' + cap.source +
+        ' · <a data-action="cap-' + windowKey + '">recalibrate</a>';
+    } else {
+      pctEl.textContent = '—';
+      lblEl.innerHTML = 'cap: not set · <a data-action="cap-' + windowKey + '">mark a throttle to calibrate</a>';
+    }
+  }
+
+  function renderGauges() {
+    renderGauge('g5h', agg5h, '5h');
+    renderGauge('gw', aggWk, 'week');
+  }
+  renderGauges();
+
+  // ─── KPI row ───────────────────────────────────────────────────────
+  const interactive = turns.filter(t => t.t === 'interactive' && !t.sc);
+  const headless = turns.filter(t => t.t === 'headless');
+  const sidechains = turns.filter(t => t.sc);
+  const avgCtx = interactive.length ? interactive.reduce((s,t) => s+t.ctx, 0) / interactive.length : 0;
+  const peakCtx = turns.reduce((m,t) => Math.max(m, t.ctx), 0);
+  const over500 = interactive.filter(t => t.ctx > 500000).length;
+  const totalCost = turns.reduce((s,t) => s + (t.c||0), 0);
+
+  const pctOver500 = interactive.length ? (100 * over500 / interactive.length) : 0;
+  const peakTurn = turns.reduce((m, t) => (t.ctx > (m ? m.ctx : 0) ? t : m), null);
+  const peakDayStr = peakTurn ? fmtDay.format(new Date(peakTurn.ts)) : '—';
+
+  const kpis = [
+    { label: 'interactive turns', value: interactive.length.toLocaleString(), sub: 'top-level user sessions' },
+    { label: 'headless turns', value: headless.length.toLocaleString(), sub: 'cron + scheduled agents' },
+    { label: 'sidechain turns', value: sidechains.length.toLocaleString(), sub: 'subagent dispatches' },
+    { label: 'avg ctx / turn', value: fmtNum(Math.round(avgCtx)), sub: 'tokens the model saw each turn' },
+    { label: 'peak ctx', value: fmtNum(peakCtx), sub: 'single heaviest turn in window' },
+    { label: '>500k ctx turns', value: over500.toLocaleString(), sub: pctOver500.toFixed(1) + '% of interactive · heavy sessions' },
+    { label: 'total cost', value: fmtUsd(totalCost), sub: 'list-price USD, ' + DATA.lookback_days + 'd window' },
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="label">${k.label}</div>
+      <div class="value">${k.value}</div>
+      <div class="sub">${k.sub}</div>
+    </div>`).join('');
+
+  // ─── Dynamic assertion titles + hero takeaway ──────────────────────
+  function renderAssertions() {
+    const heroEl = document.getElementById('hero-takeaway');
+    const scatterEl = document.getElementById('scatter-title');
+    const hourlyEl = document.getElementById('hourly-title');
+    if (!turns.length) {
+      if (heroEl) heroEl.textContent = 'No turns in this window.';
+      return;
+    }
+
+    // Hero takeaway — lead with the headline finding about this user's pattern
+    const heavy = pctOver500 >= 10;
+    const weekCap = capFor('week');
+    const fiveCap = capFor('5h');
+    const wkPct = weekCap.cost > 0 ? Math.min(100, 100 * aggWk.cost / weekCap.cost) : null;
+    const fhPct = fiveCap.cost > 0 ? Math.min(100, 100 * agg5h.cost / fiveCap.cost) : null;
+
+    let hero = `<em>${interactive.length.toLocaleString()}</em> interactive turns across <em>${DATA.lookback_days}</em> days`;
+    if (heavy) {
+      hero += ` · <em>${pctOver500.toFixed(0)}%</em> pushed past 500k context — heavy-session user`;
+    } else {
+      hero += ` · avg ${fmtNum(Math.round(avgCtx))} ctx · peak <em>${fmtNum(peakCtx)}</em> on ${peakDayStr}`;
+    }
+    if (wkPct !== null) {
+      hero += ` · 7d window at <em>${wkPct.toFixed(0)}%</em> of your ${weekCap.source} cap`;
+    } else if (fhPct !== null) {
+      hero += ` · 5h window at <em>${fhPct.toFixed(0)}%</em> of your ${fiveCap.source} cap`;
+    }
+    if (heroEl) heroEl.innerHTML = hero + '.';
+
+    // Scatter title — states the finding about context-ceiling behavior
+    if (scatterEl) {
+      if (heavy) {
+        scatterEl.textContent =
+          `${over500.toLocaleString()} turns pushed past 500k context — peak ${fmtNum(peakCtx)} on ${peakDayStr}`;
+      } else if (over500 > 0) {
+        scatterEl.textContent =
+          `Most turns stay under 500k — only ${pctOver500.toFixed(1)}% cross the threshold (peak ${fmtNum(peakCtx)})`;
+      } else {
+        scatterEl.textContent =
+          `All ${interactive.length.toLocaleString()} interactive turns stayed under 500k context — controlled ceiling`;
+      }
+    }
+
+    // Hourly rollup title — states the rolling-average behavior
+    if (hourlyEl) {
+      // Compute % of hours where rolling avg > 200k (only counts hours with data)
+      // Reuse the rolling array computed below if available; for title we compute a cheap version now
+      const HOUR_MS = 3600 * 1000;
+      const hourlyPool = interactive;  // same as scatter pool minus headless/side
+      if (hourlyPool.length) {
+        const byHour = new Map();
+        for (const t of hourlyPool) {
+          const h = Math.floor(t.ts / HOUR_MS) * HOUR_MS;
+          const b = byHour.get(h);
+          if (b) { b.sum += t.ctx; b.n += 1; }
+          else byHour.set(h, { sum: t.ctx, n: 1 });
+        }
+        let hoursAbove = 0, totalHours = 0;
+        for (const b of byHour.values()) {
+          totalHours++;
+          if (b.sum / b.n > 200000) hoursAbove++;
+        }
+        const hrPct = totalHours ? (100 * hoursAbove / totalHours) : 0;
+        hourlyEl.textContent =
+          `Hourly average context held above 200k for ${hrPct.toFixed(0)}% of active hours (${hoursAbove} of ${totalHours})`;
+      }
+    }
+  }
+  renderAssertions();
+
+  // ─── Throttle list UI ──────────────────────────────────────────────
+  function renderThrottleList() {
+    const el = document.getElementById('throttle-list');
+    if (!throttles.length) {
+      el.innerHTML = '<li style="color:var(--ink-dim);border:0;padding:8px 0 0">no markers yet · click a point in the scatter or use "mark right now"</li>';
+      return;
+    }
+    el.innerHTML = throttles.map((t, i) => `
+      <li>
+        <span>${fmtDate.format(new Date(t.ts))} · ${t.window} window · ${fmtUsd(t.cost)} · ${fmtNum(t.tokens)} tokens</span>
+        <span class="del" data-del="${i}">remove</span>
+      </li>`).join('');
+  }
+  renderThrottleList();
+
+  function addThrottleAt(ts) {
+    // Compute cost/tokens for both the 5h and week window ending at ts
+    function aggAt(ts, windowMs) {
+      const cutoff = ts - windowMs;
+      let cost = 0, tokens = 0;
+      for (const t of turns) {
+        if (t.ts < cutoff || t.ts > ts) continue;
+        cost += t.c || 0;
+        tokens += (t.in||0) + (t.out||0) + (t.cr||0) + (t.cw||0);
+      }
+      return { cost, tokens };
+    }
+    const a5 = aggAt(ts, FIVE_HRS);
+    const aw = aggAt(ts, SEVEN_DAYS);
+    throttles.push({ ts, window: '5h',   cost: a5.cost, tokens: a5.tokens });
+    throttles.push({ ts, window: 'week', cost: aw.cost, tokens: aw.tokens });
+    saveThrottles(throttles);
+    renderThrottleList();
+    renderGauges();
+    updateScatterMarks();
+  }
+
+  // ─── Scatter ───────────────────────────────────────────────────────
+  const COLORS = { opus: T.opus, sonnet: T.sonnet, haiku: T.haiku, unknown: '#777' };
+  const scatter = echarts.init(document.getElementById('scatter'), null, {
+    renderer: 'canvas',          // canvas is right here — 50k+ points
+    useCoarsePointer: true,      // 44px touch target snapping for item interaction
+    pointerSize: 44,
+  });
+
+  function buildSeries(filters) {
+    const out = [];
+    for (const m of ['opus','sonnet','haiku','unknown']) {
+      if (!filters.models[m] && m !== 'unknown') continue;
+      const main = [], sc = [];
+      for (const t of turns) {
+        if (t.m !== m) continue;
+        if (!filters.headless && t.t === 'headless') continue;
+        if (!filters.sidechains && t.sc) continue;
+        const row = [t.ts, t.ctx, t.s, t.c, t.t];
+        if (t.sc) sc.push(row); else main.push(row);
+      }
+      if (main.length) out.push({
+        name: m, type: 'scatter', data: main,
+        symbolSize: 5,
+        itemStyle: { color: COLORS[m], opacity: 0.65 },
+        large: true, largeThreshold: 1500,
+        emphasis: { focus: 'series', itemStyle: { opacity: 1 } },
+      });
+      if (filters.sidechains && sc.length) out.push({
+        name: m + ' (sc)', type: 'scatter', data: sc,
+        symbolSize: 3,
+        itemStyle: { color: COLORS[m], opacity: 0.22 },
+        large: true, largeThreshold: 1500,
+      });
+    }
+    return out;
+  }
+
+  function throttleMarks() {
+    if (!throttles.length) return [];
+    return throttles
+      .filter(t => t.window === '5h')  // only show 5h markers on the scatter (one per event)
+      .map(t => ({
+        xAxis: t.ts,
+        lineStyle: { color: T.crit, width: 1, type: 'dashed' },
+        label: { formatter: 'throttle', color: T.crit, fontSize: 10, position: 'end' },
+      }));
+  }
+
+  function renderScatter(filters) {
+    const option = {
+      backgroundColor: 'transparent',
+      animation: !REDUCED_MOTION,
+      animationDuration: REDUCED_MOTION ? 0 : 300,
+      aria: { enabled: true, decal: { show: true } },
+      grid: { left: 72, right: 28, top: 28, bottom: 66 },
+      media: [
+        { query: { maxWidth: 500 }, option: {
+            grid: { left: 48, right: 10, top: 24, bottom: 80 },
+            xAxis: { axisLabel: { fontSize: 10 } },
+            yAxis: { axisLabel: { fontSize: 10 }, nameGap: 10 },
+        } },
+      ],
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        backgroundColor: 'rgba(14,13,19,0.95)',
+        borderColor: T.border, borderWidth: 1,
+        textStyle: { color: T.ink, fontFamily: T.mono, fontSize: 12 },
+        formatter: p => {
+          const d = p.data;
+          const ctx = d[1];
+          // Interpretation: where does this sit on the context-ceiling ladder?
+          let interp;
+          if (ctx < 100000) interp = 'Fresh session — cache barely warm.';
+          else if (ctx < 300000) interp = 'Normal working session.';
+          else if (ctx < 500000) interp = 'Heavy session — cache is paying off.';
+          else if (ctx < 800000) interp = 'Long-running session — context is expensive to re-cache.';
+          else interp = 'Near ceiling — wrap this up or start fresh.';
+          return `<div style="font-weight:700;color:#fff">${fmtDate.format(new Date(d[0]))}</div>
+                  ctx: <b>${fmtNum(ctx)}</b><br>
+                  model: ${p.seriesName}<br>
+                  session: ${d[2]}<br>
+                  cost: $${(d[3]||0).toFixed(3)}<br>
+                  <span style="font-style:italic;font-size:10px;color:#b5b0a9">${interp}</span><br>
+                  <span style="color:#82ad95;font-size:10px">click to mark throttle</span>`;
+        },
+      },
+      xAxis: {
+        type: 'time',
+        axisLine: { lineStyle: { color: T.border } },
+        axisLabel: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+        splitLine: { lineStyle: { color: T.divider } },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'context tokens',
+        nameTextStyle: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+        axisLine: { lineStyle: { color: T.border } },
+        axisLabel: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11, formatter: v => fmtNum(v) },
+        splitLine: { lineStyle: { color: T.divider } },
+        min: 0,
+      },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0, filterMode: 'none',
+          zoomOnMouseWheel: 'ctrl',  // ctrl+wheel = zoom
+          moveOnMouseWheel: true,    // plain wheel = pan time range
+          zoomLock: false,
+        },
+        { type: 'slider', xAxisIndex: 0, height: 22, bottom: 18,
+          backgroundColor: 'transparent', borderColor: T.border,
+          fillerColor: "rgba(130,173,149,0.15)",
+          handleStyle: { color: T.sonnet },
+          textStyle: { color: T.inkDim, fontFamily: T.mono, fontSize: 10 },
+          filterMode: 'none' },
+      ],
+      series: buildSeries(filters).concat([{
+        type: 'line', data: [],
+        markLine: {
+          silent: true, symbol: 'none',
+          lineStyle: { type: 'dashed', width: 1 },
+          label: { color: T.inkDim, fontFamily: T.mono, fontSize: 10, position: 'end' },
+          data: throttleMarks().concat([
+            { yAxis: 200000, lineStyle: { color: '#6b8ec4' }, label: { formatter: '200k' } },
+            { yAxis: 500000, lineStyle: { color: '#d4a34d' }, label: { formatter: '500k' } },
+            { yAxis: 800000, lineStyle: { color: '#e26a3f' }, label: { formatter: '800k' } },
+          ]),
+        },
+      }]),
+    };
+    scatter.setOption(option, true);
+  }
+  function updateScatterMarks() { renderScatter(currentFilters()); }
+
+  function currentFilters() {
+    return {
+      models: {
+        opus: document.querySelector('[data-toggle="opus"]').checked,
+        sonnet: document.querySelector('[data-toggle="sonnet"]').checked,
+        haiku: document.querySelector('[data-toggle="haiku"]').checked,
+      },
+      sidechains: document.getElementById('toggle-side').checked,
+      headless: document.getElementById('toggle-headless').checked,
+    };
+  }
+  renderScatter(currentFilters());
+  document.querySelectorAll('.controls input').forEach(el => {
+    el.addEventListener('change', () => renderScatter(currentFilters()));
+  });
+  // Click-to-mark: no native confirm() (blocked on iOS Safari file://).
+  // The marker is immediately visible in the throttle list below, and each
+  // entry has a "remove" link for one-click undo.
+  scatter.on('click', p => {
+    if (p.componentType !== 'series' || !p.data) return;
+    addThrottleAt(p.data[0]);
+  });
+
+  // ─── Hourly rollup ─────────────────────────────────────────────────
+  const HOUR_MS = 3600 * 1000;
+  const pool = turns.filter(t => t.t === 'interactive' && !t.sc);
+  if (pool.length) {
+    const buckets = new Map();
+    for (const t of pool) {
+      const h = Math.floor(t.ts / HOUR_MS) * HOUR_MS;
+      const b = buckets.get(h);
+      if (b) { b.sum += t.ctx; b.n += 1; }
+      else buckets.set(h, { sum: t.ctx, n: 1 });
+    }
+    const minH = Math.floor(pool[0].ts / HOUR_MS) * HOUR_MS;
+    const maxH = Math.floor(pool[pool.length-1].ts / HOUR_MS) * HOUR_MS;
+    const hourly = [];
+    for (let h = minH; h <= maxH; h += HOUR_MS) {
+      const b = buckets.get(h);
+      hourly.push(b ? [h, Math.round(b.sum/b.n), b.n] : [h, null, 0]);
+    }
+    const WINDOW = 24;
+    const rolling = [];
+    let wSum = 0, wCount = 0;
+    const queue = [];
+    for (let i = 0; i < hourly.length; i++) {
+      const [ts, avg, cnt] = hourly[i];
+      if (avg !== null) { queue.push({ avg, cnt }); wSum += avg*cnt; wCount += cnt; }
+      else queue.push(null);
+      if (queue.length > WINDOW) {
+        const dropped = queue.shift();
+        if (dropped) { wSum -= dropped.avg * dropped.cnt; wCount -= dropped.cnt; }
+      }
+      rolling.push([ts, wCount > 0 ? Math.round(wSum/wCount) : null]);
+    }
+
+    // SVG renderer for the hourly — it's simple bar/line, well under 1k points.
+    // Per mobile-playbook.md: canvas only for >1k points (memory pressure on low-end phones).
+    const hchart = echarts.init(document.getElementById('hourly'), null, { renderer: 'svg' });
+    hchart.setOption({
+      backgroundColor: 'transparent',
+      animation: !REDUCED_MOTION,
+      animationDuration: REDUCED_MOTION ? 0 : 400,
+      aria: { enabled: true, decal: { show: true } },
+      grid: { left: 72, right: 72, top: 28, bottom: 66 },
+      media: [
+        { query: { maxWidth: 500 }, option: {
+            grid: { left: 48, right: 48, top: 28, bottom: 90 },
+            legend: { top: 'auto', bottom: 0, right: 'center', left: 'center', orient: 'horizontal' },
+            xAxis: { axisLabel: { fontSize: 10 } },
+            yAxis: [
+              { axisLabel: { fontSize: 10 } },
+              { axisLabel: { fontSize: 10 } },
+            ],
+        } },
+      ],
+      legend: {
+        data: ['hourly avg ctx','24h rolling avg','turns/hour'],
+        textStyle: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 }, top: 4, right: 72,
+      },
+      tooltip: { trigger: 'axis',
+        confine: true,
+        backgroundColor: 'rgba(14,13,19,0.95)',
+        borderColor: T.border, borderWidth: 1,
+        textStyle: { color: T.ink, fontFamily: T.mono, fontSize: 12 },
+        formatter: params => {
+          if (!params || !params.length) return '';
+          const ts = new Date(params[0].data[0]);
+          let s = '<div style="font-weight:700;color:#fff">' + fmtDate.format(ts) + '</div>';
+          let rollingVal = null, turnCount = null;
+          for (const p of params) {
+            const v = p.data[1];
+            if (v == null) continue;
+            s += p.marker + p.seriesName + ': <b>' + (p.seriesName === 'turns/hour' ? v : fmtNum(v)) + '</b><br>';
+            if (p.seriesName === '24h rolling avg') rollingVal = v;
+            if (p.seriesName === 'turns/hour') turnCount = v;
+          }
+          // Interpretation line
+          if (rollingVal != null) {
+            const x = rollingVal / 200000;
+            let interp;
+            if (x < 0.75) interp = 'Rolling avg well under the 200k threshold — light-touch hours.';
+            else if (x < 1.25) interp = 'Rolling avg near the 200k threshold — typical working pace.';
+            else if (x < 2.5) interp = `Rolling avg ${x.toFixed(1)}× the 200k threshold — sustained heavy use.`;
+            else interp = `Rolling avg ${x.toFixed(1)}× the 200k threshold — extreme burst or long session.`;
+            s += '<span style="font-style:italic;font-size:10px;color:#b5b0a9">' + interp + '</span>';
+          }
+          return s;
+        },
+      },
+      xAxis: { type: 'time',
+        axisLine: { lineStyle: { color: T.border } },
+        axisLabel: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+        splitLine: { lineStyle: { color: T.divider } },
+      },
+      yAxis: [
+        { type: 'value', name: 'context tokens',
+          nameTextStyle: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+          axisLine: { lineStyle: { color: T.border } },
+          axisLabel: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11, formatter: v => fmtNum(v) },
+          splitLine: { lineStyle: { color: T.divider } }, min: 0 },
+        { type: 'value', name: 'turns/hr', position: 'right',
+          nameTextStyle: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+          axisLine: { lineStyle: { color: T.border } },
+          axisLabel: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+          splitLine: { show: false }, min: 0 },
+      ],
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0, filterMode: 'none',
+          zoomOnMouseWheel: 'ctrl',  // ctrl+wheel = zoom
+          moveOnMouseWheel: true,    // plain wheel = pan time range
+          zoomLock: false,
+        },
+        { type: 'slider', xAxisIndex: 0, height: 22, bottom: 18,
+          backgroundColor: 'transparent', borderColor: T.border,
+          fillerColor: "rgba(130,173,149,0.15)",
+          handleStyle: { color: T.sonnet },
+          textStyle: { color: T.inkDim, fontFamily: T.mono, fontSize: 10 }, filterMode: 'none' },
+      ],
+      series: [
+        { name: 'turns/hour', type: 'bar', yAxisIndex: 1,
+          data: hourly.map(r => [r[0], r[2]]),
+          itemStyle: { color: 'rgba(107,142,196,0.35)' }, large: true, z: 1 },
+        { name: 'hourly avg ctx', type: 'line', yAxisIndex: 0,
+          data: hourly.map(r => [r[0], r[1]]), showSymbol: false, connectNulls: false,
+          lineStyle: { color: 'rgba(226,106,63,0.45)', width: 1 }, z: 2 },
+        { name: '24h rolling avg', type: 'line', yAxisIndex: 0,
+          data: rolling, showSymbol: false, connectNulls: true,
+          lineStyle: { color: '#e26a3f', width: 2.5 }, z: 3 },
+      ],
+    });
+    // Resize hook set after hookResize() is defined below
+    window.__pendingHourly = hchart;
+  }
+
+  // ─── Panel action handlers ─────────────────────────────────────────
+  // "clear all" uses a two-click confirmation (no native confirm on iOS file://)
+  let clearArmed = false;
+  let clearTimer = null;
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-action]');
+    if (a) {
+      const action = a.dataset.action;
+      if (action === 'throttle-now') addThrottleAt(Date.now());
+      if (action === 'throttle-clear') {
+        if (clearArmed) {
+          throttles = []; saveThrottles(throttles);
+          renderThrottleList(); renderGauges(); updateScatterMarks();
+          clearArmed = false;
+          clearTimeout(clearTimer);
+        } else {
+          clearArmed = true;
+          a.textContent = 'really? click again to confirm';
+          a.style.color = 'var(--crit)';
+          clearTimer = setTimeout(() => {
+            clearArmed = false;
+            a.textContent = 'clear all';
+            a.style.color = '';
+          }, 3000);
+        }
+      }
+    }
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      const i = parseInt(del.dataset.del, 10);
+      throttles.splice(i, 1);
+      saveThrottles(throttles);
+      renderThrottleList(); renderGauges(); updateScatterMarks();
+    }
+  });
+
+  // Resize: use ResizeObserver where available (catches orientation,
+  // CSS layout shifts, tab switches). Falls back to window.resize.
+  function hookResize(chart, el) {
+    if (typeof ResizeObserver !== 'undefined') {
+      let timeout;
+      const ro = new ResizeObserver(() => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => chart.resize(), 50);
+      });
+      ro.observe(el);
+    } else {
+      window.addEventListener('resize', () => chart.resize());
+    }
+    // iOS Safari needs an extra kick after orientation change
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => chart.resize(), 300);
+    });
+  }
+  hookResize(scatter, document.getElementById('scatter'));
+  if (window.__pendingHourly) {
+    hookResize(window.__pendingHourly, document.getElementById('hourly'));
+    delete window.__pendingHourly;
+  }
+  if (p5hChart) hookResize(p5hChart, document.getElementById('p5h-chart'));
+  if (pwChart)  hookResize(pwChart,  document.getElementById('pw-chart'));
+
+  // ─── Daily trends from full history ───────────────────────────────
+  const dailyStats = DATA.daily_stats || [];
+  if (dailyStats.length) {
+    const trendsEl = document.getElementById('trends');
+    document.getElementById('trends-hint').textContent =
+      dailyStats.length + ' days of history (' + dailyStats[0].day + ' → ' + dailyStats[dailyStats.length - 1].day + ')';
+
+    const trendsChart = echarts.init(trendsEl, null, { renderer: 'svg' });
+
+    const METRICS = {
+      tokens_per_turn: { label: 'tokens / turn', fmt: fmtNum, line: T.opus,
+        get: d => d.tokens_per_turn },
+      cost_per_turn: { label: 'cost / turn (USD)', fmt: v => '$' + v.toFixed(3), line: T.opus,
+        get: d => d.cost_per_turn },
+      cost: { label: 'total cost (USD)', fmt: fmtUsd, line: T.opus,
+        get: d => d.cost },
+      avg_ctx: { label: 'avg context tokens / turn', fmt: fmtNum, line: T.opus,
+        get: d => d.avg_ctx },
+      cache_hit_rate: { label: 'cache read share', fmt: v => (v*100).toFixed(0) + '%', line: T.sonnet,
+        get: d => d.cache_hit_rate },
+      opus_share: { label: 'opus share of turns', fmt: v => (v*100).toFixed(0) + '%', line: T.crit,
+        get: d => {
+          const total = (d.opus || 0) + (d.sonnet || 0) + (d.haiku || 0);
+          return total ? d.opus / total : 0;
+        } },
+      turns: { label: 'turns per day', fmt: v => Math.round(v).toLocaleString(), line: T.haiku,
+        get: d => d.turns },
+    };
+
+    function rolling7(arr) {
+      const out = [];
+      let sum = 0;
+      const window = [];
+      for (const v of arr) {
+        window.push(v);
+        sum += v;
+        if (window.length > 7) sum -= window.shift();
+        out.push(sum / window.length);
+      }
+      return out;
+    }
+
+    // Compute "YYYY-MM-DD" in PT for the 1M-activation marker. The daily_stats
+    // array uses PT dates (day field), so we need to match that keying.
+    let firstOneMDay = null;
+    if (DATA.first_1m_ms) {
+      // Use en-CA locale with America/Los_Angeles — produces YYYY-MM-DD format.
+      firstOneMDay = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date(DATA.first_1m_ms));
+    }
+
+    function renderTrends(metricKey) {
+      const m = METRICS[metricKey];
+      if (!m) return;
+      const data = dailyStats.map(d => [d.day, m.get(d)]);
+      const rolling = rolling7(data.map(d => d[1])).map((v, i) => [data[i][0], v]);
+      trendsChart.setOption({
+        backgroundColor: 'transparent',
+        animation: !REDUCED_MOTION,
+        animationDuration: REDUCED_MOTION ? 0 : 400,
+        aria: { enabled: true, decal: { show: true } },
+        grid: { left: 64, right: 24, top: 24, bottom: 56 },
+        tooltip: {
+          trigger: 'axis',
+          confine: true,
+          backgroundColor: T.bgTooltip,
+          borderColor: T.border, borderWidth: 1,
+          textStyle: { color: T.ink, fontFamily: T.mono, fontSize: 11 },
+          formatter: params => {
+            if (!params || !params.length) return '';
+            const day = params[0].data[0];
+            const lines = ['<div style="font-weight:700;color:#fff">' + day + '</div>'];
+            for (const p of params) {
+              if (p.data[1] == null) continue;
+              lines.push(p.marker + p.seriesName + ': <b>' + m.fmt(p.data[1]) + '</b>');
+            }
+            return lines.join('<br>');
+          },
+        },
+        xAxis: {
+          type: 'category',
+          data: data.map(d => d[0]),
+          axisLine: { lineStyle: { color: T.border } },
+          axisLabel: {
+            color: T.inkDim, fontFamily: T.mono, fontSize: 10,
+            hideOverlap: true,
+            formatter: v => {
+              const d = new Date(v);
+              return (d.getMonth()+1) + '/' + d.getDate();
+            },
+          },
+          axisTick: { show: false },
+        },
+        yAxis: {
+          type: 'value',
+          name: m.label,
+          nameTextStyle: { color: T.inkMuted, fontFamily: T.mono, fontSize: 11 },
+          nameGap: 50,
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: T.inkDim, fontFamily: T.mono, fontSize: 10, formatter: m.fmt },
+          splitLine: { lineStyle: { color: T.divider } },
+          min: 0,
+        },
+        dataZoom: [
+          { type: 'inside', xAxisIndex: 0, filterMode: 'none',
+          zoomOnMouseWheel: 'ctrl',  // ctrl+wheel = zoom
+          moveOnMouseWheel: true,    // plain wheel = pan time range
+          zoomLock: false,
+        },
+          { type: 'slider', xAxisIndex: 0, height: 18, bottom: 14,
+            backgroundColor: 'transparent', borderColor: T.border,
+            fillerColor: 'rgba(130,173,149,0.15)',
+            handleStyle: { color: T.sonnet },
+            textStyle: { color: T.inkDim, fontFamily: T.mono, fontSize: 9 },
+            filterMode: 'none' },
+        ],
+        series: [
+          {
+            name: 'daily',
+            type: 'bar',
+            data: data,
+            itemStyle: { color: m.line + '55' },
+            barWidth: '70%',
+            z: 1,
+          },
+          {
+            name: '7-day rolling avg',
+            type: 'line',
+            data: rolling,
+            showSymbol: false,
+            smooth: false,
+            lineStyle: { color: m.line, width: 2.5 },
+            z: 2,
+            markLine: firstOneMDay ? {
+              silent: true,
+              symbol: 'none',
+              lineStyle: { color: T.warn, width: 1.5, type: 'dashed' },
+              label: {
+                color: T.warn,
+                fontFamily: T.mono,
+                fontSize: 10,
+                fontWeight: 700,
+                position: 'insideEndTop',
+                formatter: '1M context\nactivated',
+                backgroundColor: T.bg,
+                padding: [3, 6],
+                lineHeight: 12,
+              },
+              data: [{ xAxis: firstOneMDay }],
+            } : undefined,
+          },
+        ],
+      }, true);
+    }
+    renderTrends('tokens_per_turn');
+
+    document.querySelectorAll('.trend-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const metric = btn.dataset.metric;
+        document.querySelectorAll('.trend-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderTrends(metric);
+      });
+    });
+
+    hookResize(trendsChart, trendsEl);
+  }
+})();
+</script>
+</body>
+</html>

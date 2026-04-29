@@ -1,0 +1,20 @@
+# Generated dashboard output — contains your personal usage data
+*.html
+
+# Keep the templates and the committed sample
+!dashboard-wide-template.html
+!dashboard-template.html
+!dashboard-sample.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# macOS
+.DS_Store
+
+# Rate-limit cache files (written to ~/.claude/, not here, but just in case)
+rate-limits*.json
+rate-limits*.jsonl
