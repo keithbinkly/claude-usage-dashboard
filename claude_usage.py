@@ -1926,13 +1926,18 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
     return result
 
 
-def generate_sample_dataset(days: int = 21) -> Dataset:
+def generate_sample_dataset(days: int = 90) -> Dataset:
     """Build a Dataset from synthetic turns for demo/documentation purposes.
 
-    Produces a realistic usage narrative — Opus-heavy sprint in the middle,
-    light weekend dips, heavy-context days that light up the bucket tiles —
-    without any real user data. Deterministic (seed=42).
+    Narrative arc (90 days):
+      - Days 90-61: pre-1M-context baseline — Sonnet-heavy, small contexts (<150K), steady pace
+      - Days 60-55: 1M context window rollout — visible volume surge, sudden appearance of
+                    500K-900K turns, Opus share jumps as users push the new ceiling
+      - Days 54-30: post-rollout sustained heavy period, large contexts now routine
+      - Days 29-10: mixed sprints and quieter stretches
+      - Days  9- 1: recent moderate-to-heavy, Opus/Sonnet mix
 
+    Deterministic (seed=42). No real user data.
     Usage: python3 claude_usage.py --sample --layout wide --open
     """
     import random
@@ -1940,36 +1945,68 @@ def generate_sample_dataset(days: int = 21) -> Dataset:
     DAY_MS = 86_400_000
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
+    # Rollout week: day_offset range where 1M context becomes available.
+    # Placed ~60 days ago so the before/after contrast is visible in the chart.
+    ROLLOUT_START = 60  # day_offset where the surge begins (older end)
+    ROLLOUT_END   = 55  # day_offset where the surge peaks and normalizes
+
     turns: list[Turn] = []
 
     for day_offset in range(days, 0, -1):  # oldest first
-        # Profile varies by recency to create an interesting arc:
-        #   oldest (day_offset=days): moderate Sonnet work
-        #   middle sprint (day_offset ~10-15): heavy Opus, large contexts
-        #   recent (day_offset=1-3): back to moderate
-        if day_offset <= 3:
-            n_turns = rng.randint(25, 42)
-            opus_f, son_f = 0.25, 0.65
-            heavy_f = 0.14
-        elif day_offset <= 7:
-            n_turns = rng.randint(50, 72)
-            opus_f, son_f = 0.45, 0.45
-            heavy_f = 0.32
-        elif day_offset <= 10:
-            n_turns = rng.randint(12, 24)
-            opus_f, son_f = 0.15, 0.70
-            heavy_f = 0.07
-        elif day_offset <= 16:
-            n_turns = rng.randint(58, 84)
-            opus_f, son_f = 0.50, 0.40
-            heavy_f = 0.42
+
+        if day_offset > ROLLOUT_START:
+            # ── Pre-rollout baseline ──────────────────────────────────────
+            # Small contexts only, no heavy turns, mostly Sonnet.
+            n_turns   = rng.randint(18, 32)
+            opus_f, son_f = 0.12, 0.72
+            heavy_f   = 0.0   # no large contexts yet
+            ctx_cap   = 140_000
+
+        elif day_offset >= ROLLOUT_END:
+            # ── 1M rollout surge week ─────────────────────────────────────
+            # Volume spikes sharply, large contexts appear for the first time,
+            # Opus share jumps as users experiment with the new ceiling.
+            n_turns   = rng.randint(70, 95)
+            opus_f, son_f = 0.52, 0.38
+            heavy_f   = 0.55  # majority of turns now hitting large contexts
+            ctx_cap   = 980_000
+
+        elif day_offset >= 40:
+            # ── Post-rollout sustained heavy ──────────────────────────────
+            n_turns   = rng.randint(48, 72)
+            opus_f, son_f = 0.42, 0.46
+            heavy_f   = 0.38
+            ctx_cap   = 980_000
+
+        elif day_offset >= 25:
+            # ── Quieter stretch / lighter projects ────────────────────────
+            n_turns   = rng.randint(20, 38)
+            opus_f, son_f = 0.22, 0.65
+            heavy_f   = 0.15
+            ctx_cap   = 980_000
+
+        elif day_offset >= 10:
+            # ── Second sprint ─────────────────────────────────────────────
+            n_turns   = rng.randint(55, 80)
+            opus_f, son_f = 0.48, 0.42
+            heavy_f   = 0.40
+            ctx_cap   = 980_000
+
+        elif day_offset <= 3:
+            # ── Most recent days: moderate ────────────────────────────────
+            n_turns   = rng.randint(25, 42)
+            opus_f, son_f = 0.28, 0.62
+            heavy_f   = 0.18
+            ctx_cap   = 980_000
+
         else:
-            n_turns = rng.randint(15, 35)
-            opus_f, son_f = 0.20, 0.65
-            heavy_f = 0.10
+            # ── Recent wind-down ──────────────────────────────────────────
+            n_turns   = rng.randint(30, 55)
+            opus_f, son_f = 0.35, 0.55
+            heavy_f   = 0.25
+            ctx_cap   = 980_000
 
         haiku_f = 1.0 - opus_f - son_f
-        # Start each day between 8am-10am synthetic time
         t_cursor = now_ms - day_offset * DAY_MS + rng.randint(8 * 3_600_000, 10 * 3_600_000)
 
         n_sessions = max(1, min(4, n_turns // 12))
@@ -1986,15 +2023,15 @@ def generate_sample_dataset(days: int = 21) -> Dataset:
                 r = rng.random()
                 model = "opus" if r < opus_f else ("sonnet" if r < opus_f + son_f else "haiku")
 
-                if rng.random() < heavy_f:
+                if heavy_f > 0 and rng.random() < heavy_f:
                     ctx = rng.choices(
                         [rng.randint(200_001, 499_999),
                          rng.randint(500_000, 799_999),
-                         rng.randint(800_000, 980_000)],
-                        weights=[0.50, 0.30, 0.20],
+                         min(ctx_cap, rng.randint(800_000, 980_000))],
+                        weights=[0.45, 0.32, 0.23],
                     )[0]
                 else:
-                    ctx = rng.randint(4_000, 185_000)
+                    ctx = rng.randint(4_000, min(ctx_cap, 185_000))
 
                 if turn_idx == 0:
                     input_t = max(3_000, int(ctx * rng.uniform(0.15, 0.28)))
@@ -2062,7 +2099,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.sample:
-        sample_days = args.days if args.days != 9999 else 21
+        sample_days = args.days if args.days != 9999 else 90
         ds = generate_sample_dataset(sample_days)
         if args.out is None:
             args.out = Path("claude-usage-sample.html")
