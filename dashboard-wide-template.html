@@ -15,7 +15,7 @@
      script in <head>; the rest of theme logic runs after body parses. */
   (function () {
     try {
-      if (localStorage.getItem('cum-theme') === 'light') {
+      if (localStorage.getItem('cum-theme') !== 'dark') {
         document.documentElement.setAttribute('data-theme', 'light');
       }
     } catch (e) { /* localStorage blocked — no-op, stay on dark default */ }
@@ -142,11 +142,7 @@
     display: grid;
     grid-template-columns: repeat(12, 1fr);
     gap: 12px 14px;
-    /* L/R/B gutter is intentionally larger than top — it's a "border space"
-       reserved for filter elements that sit just outside the cards
-       (pacing-toggles is the first inhabitant). Top stays tight so the
-       header row hugs the viewport edge. */
-    padding: 8px 50px 30px;
+    padding: 8px 20px 20px;
     max-width: none;  /* full viewport width */
   }
   /* ── Desktop lock: canvas fits inside one MBP 15" window ─────────
@@ -159,12 +155,9 @@
   @media (min-width: 1201px) {
     .shell {
       height: 100vh;
-      /* Wider L/R gutter than the legacy 16px so out-of-card filter
-         elements (pacing-toggles, future per-chart filters) have room
-         to live just outside the cards without clipping the viewport. */
-      padding: 8px 50px 24px;
+      padding: 8px 16px 12px;
       gap: 10px 14px;
-      grid-template-rows: auto 250px 1fr;
+      grid-template-rows: auto 300px 1fr;
       overflow: hidden;
     }
     /* !important here because .lever-card / .footer / .header-meta
@@ -200,13 +193,12 @@
       align-self: stretch;
       width: 100%;
     }
-    /* Trends section: show the caption at desktop too. Switch chart
-       from flex:1 1 auto → flex:1 1 0 so it sizes from zero and
-       yields space to the caption sibling. Keep chart-help collapsed
-       (markers inline on the chart serve the same purpose). */
+    /* Trends section: kill the caption on the locked view — the 1M
+       and Opus 4.7 markers on the chart itself already label them
+       inline. Also collapse chart-help to save a row of chrome. */
+    .trends-section > .trends-caption { display: none; }
     .trends-section > .chart-help { display: none; }
-    .trends-section { overflow: visible; }
-    .trends-chart { min-height: 0 !important; flex: 1 1 0 !important; }
+    .trends-chart { min-height: 0; }
     /* Heavy-turn card: collapse the chart-help row (what-this-shows
        explainer); the composition bar + band labels inside the chart
        already teach the reader. */
@@ -214,16 +206,7 @@
     /* Sessions card: scrollable body so if there are more rows than
        fit in 260px, the user can scroll inside the card instead of
        the table bleeding past it. */
-    .sessions-card > #session-table-host {
-      flex: 1 1 0;
-      min-height: 0;
-      overflow: auto;
-      /* Scroll still works; just hide the bright-white scrollbar strip
-         (was visible on the right edge in light mode, distracting). Same
-         pattern used by .session-scroll and .heavy-grid in this file. */
-      scrollbar-width: none;          /* Firefox */
-    }
-    .sessions-card > #session-table-host::-webkit-scrollbar { display: none; }  /* WebKit */
+    .sessions-card > #session-table-host { flex: 1 1 0; min-height: 0; overflow: auto; }
 
     /* Heavy-turn card internals: mekko + evolution chart both have
        a min-height floor (280 / 240) that prevents them from shrinking
@@ -237,7 +220,7 @@
     .heavy-ribbon, .heavy-trend { min-height: 0 !important; }
     .heavy-visual-split { flex: 1 1 0; }
   }
-  @media (max-width: 1100px) { .shell { padding: 12px 36px 32px; gap: 14px 12px; } }
+  @media (max-width: 1100px) { .shell { padding: 16px 14px 28px; gap: 14px 12px; } }
   @media (max-width: 720px)  {
     .shell { grid-template-columns: repeat(6, 1fr); gap: 14px; padding: 16px 12px 28px; }
     /* Force every shell child to full-row at mobile. Use !important
@@ -476,11 +459,9 @@
   .chart-help-body ul { margin: 6px 0; padding-left: 18px; }
   .chart-help-body li { margin-bottom: 4px; }
   /* Sessions-card "?" popover renders above neighboring cards via
-     absolute positioning + high z-index. Elevate the whole card when
-     the popover is open so neighboring cards' stacking contexts don't
-     clip the popup in the bottom-left corner. */
+     absolute positioning + high z-index. Elsewhere on the page the
+     chart-help body flows in-document. */
   .sessions-card .chart-help { position: relative; }
-  .sessions-card:has(.chart-help[open]) { z-index: 20; position: relative; }
   .sessions-card .chart-help-body {
     position: absolute;
     top: calc(100% + 8px);
@@ -564,11 +545,7 @@
   .csv-preview-overlay.open::before { opacity: 1; pointer-events: auto; }
   .csv-preview-panel {
     position: relative; z-index: 1;
-    background: var(--surface, #1a1c2a);
-    border: 1px solid var(--pane-border, rgba(255,255,255,0.1));
-    border-radius: 10px;
-    overflow: hidden;
-    pointer-events: auto;
+    background: transparent;
     width: max-content;
     display: flex; flex-direction: column;
     transform: translateY(-6px); opacity: 0;
@@ -594,20 +571,20 @@
     white-space: nowrap;
   }
   .csv-preview-table th {
-    background: var(--surface-2, rgba(10,12,22,0.96));
+    background: rgba(10,12,22,0.96);
     color: var(--ink-dim); font-weight: 500; text-align: right; letter-spacing: 0.02em;
     padding: 5px 10px;
-    border: 1px solid var(--pane-border, rgba(255,255,255,0.09));
+    border: 1px solid rgba(255,255,255,0.09);
   }
   .csv-preview-table th:first-child { text-align: left; }
   .csv-preview-table td {
     color: var(--ink); text-align: right;
     padding: 4px 10px;
-    border: 1px solid var(--divider, rgba(255,255,255,0.07));
-    background: var(--surface, rgba(10,12,22,0.88));
+    border: 1px solid rgba(255,255,255,0.07);
+    background: rgba(10,12,22,0.88);
   }
   .csv-preview-table td:first-child { text-align: left; color: var(--ink-dim); }
-  .csv-preview-table tbody tr:hover td { background: var(--tint-mid); }
+  .csv-preview-table tbody tr:hover td { background: rgba(255,255,255,0.05); }
   .csv-preview-foot {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 12px 0;
@@ -616,11 +593,11 @@
   .csv-preview-cols { font-size: var(--fs-xs, 11px); color: var(--ink-dim); }
   .csv-download-btn {
     appearance: none; background: transparent; color: var(--ink-dim);
-    border: 1px solid var(--border, rgba(255,255,255,0.15));
+    border: 1px solid rgba(255,255,255,0.15);
     padding: 4px 10px; font-size: var(--fs-xs, 11px); cursor: pointer;
     transition: color 120ms, border-color 120ms;
   }
-  .csv-download-btn:hover { color: var(--ink); border-color: var(--border-accent, rgba(255,255,255,0.35)); }
+  .csv-download-btn:hover { color: var(--ink); border-color: rgba(255,255,255,0.35); }
   /* Glyph swap — the unicode moon/sun are stable across system fonts. */
   [data-theme="light"] .theme-toggle::before { content: '☾'; }
   :root:not([data-theme="light"]) .theme-toggle::before { content: '☀'; }
@@ -764,38 +741,23 @@
     align-items: stretch;
     gap: 8px;
     min-height: 0;
-    position: relative; /* anchor for absolutely-positioned .pacing-toggles */
   }
   @media (max-width: 1200px) { .pacing-pair { grid-column: span 12; } }
   @media (max-width: 900px)  {
     .pacing-pair { flex-direction: column; gap: 16px; }
   }
 
-  /* Toggle pills — pulled OUT of flex flow with position:absolute so the
-     cards' left edge stays aligned with the chart below. The pills hang
-     off the left of the .pacing-pair into the L/R gutter introduced on
-     .shell (padding-left ≥ 36px). On mobile the gutter shrinks and they
-     revert to a horizontal row above the cards (no x-offset to worry
-     about in single-column layout). The "border space" is the design
-     surface for any out-of-card filter that wants to live next to its
-     chart without consuming card x-space. */
+  /* Toggle pills — vertical sidebar on desktop, horizontal row on mobile. */
   .pacing-toggles {
-    position: absolute;
-    left: -36px;          /* sits inside the .shell gutter (50px desktop, 36px mid) */
-    top: 0;
-    bottom: 0;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding: 8px 0;
     align-items: center;
     justify-content: flex-start;
-    z-index: 2;
-    pointer-events: auto;
   }
   .pacing-toggles:empty { display: none; }
-  /* Mid-width: gutter shrinks from 50px → 36px, pull pills in proportionally. */
-  @media (max-width: 1100px) { .pacing-toggles { left: -28px; } }
   .pacing-toggle-pill {
     border-radius: 20px;
     padding: 5px 3px;
@@ -827,8 +789,6 @@
   }
   @media (max-width: 900px) {
     .pacing-toggles {
-      position: static;       /* reclaim flow on mobile so pills sit above cards */
-      left: auto; top: auto; bottom: auto;
       flex-direction: row;
       flex-wrap: wrap;
       padding: 0;
@@ -846,7 +806,7 @@
        + meta. Pane-of-glass treatment preserved; vertical padding and
        gap trimmed to help the pacing row fit inside one MBP 15" viewport
        alongside the trends + heavy row below. */
-    padding: 12px 14px;
+    padding: 14px 18px;
     background: linear-gradient(
       180deg,
       var(--pane-top) 0%,
@@ -900,44 +860,41 @@
     flex-wrap: wrap;
   }
   .pacing-label {
-    font: 700 13px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 700 15px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
     letter-spacing: -0.005em;
     color: var(--ink);
     text-transform: none;
   }
-  /* Single-button "coin" toggle — replaces the old segmented two-button
-     control. Same idiom as a light/dark theme toggle: one button flips
-     state on click, the visible glyph reflects the CURRENT unit. Sized
-     to match the label cap-height so the .pacing-pct row sits flush
-     under the title (matches the Monthly card's compact head). */
-  .chart-unit-coin {
-    flex-shrink: 0;
+  .chart-unit-toggle {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    padding: 2px;
+    flex-shrink: 0;
+  }
+  [data-theme="light"] .chart-unit-toggle {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  .chart-unit-toggle button {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 10px;
     background: transparent;
     color: var(--ink-dim);
-    border: 1px solid var(--ink-dim);
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1;
-    transition: color 120ms ease, border-color 120ms ease,
-                background 120ms ease, transform 200ms cubic-bezier(0.34,1.56,0.64,1);
+    min-height: 22px;
+    min-width: 26px;
+    transition: all 120ms ease;
   }
-  .chart-unit-coin:hover {
+  .chart-unit-toggle button:hover { color: var(--ink-muted); }
+  .chart-unit-toggle button.active {
     color: var(--ink);
-    border-color: var(--ink);
-    transform: rotate(180deg);
-  }
-  .chart-unit-coin:focus-visible {
-    outline: 2px solid var(--accent, #4a8a7e);
-    outline-offset: 2px;
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
 
   /* Session range toggle — same visual idiom as the $/tok toggle so
@@ -1033,55 +990,30 @@
   .pacing-pct {
     display: flex;
     align-items: baseline;
-    gap: 6px;
+    gap: 10px;
     font-family: var(--mono);
     font-variant-numeric: tabular-nums;
     line-height: 1;
     flex-wrap: wrap;
   }
   .pacing-pct-used {
-    font-size: 26px;
+    font-size: var(--fs-hero);
     font-weight: 700;
     color: var(--ink);
     letter-spacing: -0.02em;
-    white-space: nowrap;
   }
   .pacing-pct-sep {
-    /* Was a static "·" dot. Now a dynamic comparison glyph: "<" when
-       used % is BELOW elapsed % (under pace, green), ">" when used >
-       elapsed (over pace, yellow→red gradient by magnitude). The glyph
-       and color are written by renderPacing() based on (pctUsed - pctTime). */
-    font-size: 20px;
-    font-weight: 700;            /* bolder so the directional symbol reads strong */
-    color: var(--ink-dim);       /* default; renderPacing overrides */
+    font-size: var(--fs-xl);
+    font-weight: 400;
+    color: var(--ink-dim);
     line-height: 1;
-    padding: 0 1px;
-    font-family: var(--mono);    /* monospace for symmetric < / > rendering */
+    padding: 0 2px;
   }
   .pacing-pct-time {
-    font-size: 20px;
+    font-size: var(--fs-xl);
     font-weight: 600;
     color: var(--ink-muted);
     letter-spacing: -0.015em;
-    white-space: nowrap;
-  }
-  /* Column wrapper: number on top, "used"/"elapsed" label directly below.
-     The row flex only measures the narrow percentage widths so three cards
-     never wrap, while the label remains visible for context. */
-  .pacing-pct-col {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-  }
-  .pacing-pct-sublabel {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--ink-dim);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    line-height: 1;
   }
   @media (max-width: 720px) {
     .pacing-pct-used { font-size: var(--fs-xl); }
@@ -1309,10 +1241,10 @@
     .calibrate-group button {
       min-height: 44px;
     }
-    .chart-unit-coin {
-      width: 28px;
-      height: 28px;
-      font-size: 12px;
+    .chart-unit-toggle button {
+      min-height: 36px;
+      min-width: 36px;
+      padding: 6px 10px;
     }
     .trend-btn {
       min-height: 40px;
@@ -1488,7 +1420,7 @@
   }
   .trends-kpi-block {
     margin-bottom: 8px;
-    padding: 0 12px 6px;
+    padding-bottom: 6px;
     border-bottom: 1px solid var(--pane-divider);
   }
   .trends-kpi-head {
@@ -1594,7 +1526,7 @@
      text. */
   .metric-strip {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 0;
     margin: 8px 0 14px;
     border-top: 1px solid var(--tint-strong);
@@ -1689,10 +1621,10 @@
     background: color-mix(in srgb, var(--tile-color) 10%, transparent);
   }
   .metric-tile-label {
-    font: 500 11px/1.1 var(--mono);
+    font: 500 10px/1.1 var(--mono);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--ink-muted);
+    color: var(--ink-dim);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1715,7 +1647,7 @@
   }
   .metric-tile-value {
     display: block;
-    font: 700 20px/1.15 var(--mono);
+    font: 700 18px/1.15 var(--mono);
     font-variant-numeric: tabular-nums;
     color: var(--ink);
     letter-spacing: -0.01em;
@@ -1815,6 +1747,33 @@
   }
   @media (max-width: 720px) { .trends-chart { min-height: 240px; flex: 0 0 auto; height: 240px; } }
 
+  .trends-caption {
+    font-family: var(--body, 'Satoshi', system-ui, sans-serif);
+    font-size: var(--fs-base);
+    line-height: 1.6;
+    color: var(--ink-muted);
+    margin: 10px 0 0 0;
+    max-width: 72ch;
+  }
+  .trends-caption-intro { margin: 0 0 6px 0; }
+  .trends-caption-row {
+    margin: 0 0 3px 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .trends-caption-row:last-child { margin-bottom: 0; }
+  .trends-caption strong { color: var(--ink); font-weight: 600; }
+  .trends-caption-swatch {
+    display: inline-block;
+    width: 18px;
+    height: 0;
+    border-top: 1.5px dashed var(--ink-dim);
+    margin: 0 6px 3px 4px;
+    vertical-align: middle;
+  }
+  .trends-caption-swatch--amber { border-top-color: var(--warn, #d4a34d); }
+  .trends-caption-swatch--sonnet { border-top-color: var(--model-sonnet, #82ad95); }
 
   /* ── Row 3 (primary narrative pair) ──
      Historical trends on the left (span 7) + heavy-turn card on
@@ -2354,13 +2313,8 @@
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
-    /* Separator was border-bottom (under the toggles) when this header
-       carried a title. Title was dropped → header now contains only the
-       toggle row, and the separator visually orphaned beneath it. Flipped
-       to border-top so the line sits ABOVE the toggles, marking the
-       boundary with the chart above instead of the chart below. */
-    padding-top: 8px;
-    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
     font-family: var(--mono);
     font-size: var(--fs-sm);
     color: var(--ink-dim);
@@ -2697,20 +2651,15 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     position: relative;
-    scrollbar-width: none;
   }
-  .session-scroll::-webkit-scrollbar { display: none; }
   /* Sticky table header so column labels stay visible when scrolling.
-     Scope to #session-table-host so the rule wins specificity over any
-     bare .session-table thead th rules below. z-index bumped to 5 so
-     the header sits above sorted-row hover/selection backgrounds. */
-  #session-table-host .session-table thead th,
+     Subtle background band makes the header row read as a visible
+     section, not another data row. */
   .session-table thead th {
-    position: -webkit-sticky;        /* Safari 12 fallback */
     position: sticky;
     top: 0;
-    background: var(--surface);      /* opaque — must cover scrolled rows beneath */
-    z-index: 5;
+    background: var(--tint-header);
+    z-index: 1;
     box-shadow: 0 1px 0 var(--tint-strong-2);
   }
   @media (max-width: 720px) {
@@ -2754,11 +2703,7 @@
   .session-table td.model.sonnet { color: var(--model-sonnet); }
   .session-table td.model.haiku  { color: var(--model-haiku); }
   .session-table td.ago { color: var(--ink-dim); font-size: var(--fs-sm); }
-  .session-table td.rec { text-align: left; }
-  .session-table th.sortable { cursor: pointer; user-select: none; }
-  .session-table th.sortable:hover { color: var(--ink); }
-  .session-table th.sort-asc::after  { content: ' ▲'; font-size: 0.7em; opacity: 0.7; }
-  .session-table th.sort-desc::after { content: ' ▼'; font-size: 0.7em; opacity: 0.7; }
+  .session-table td.rec { text-align: right; }
   .session-table .badge {
     display: inline-block;
     font-family: var(--mono);
@@ -2797,6 +2742,125 @@
     font-style: italic;
   }
 
+  /* ── Resume button + account picker modal ── */
+  .session-table td.resume-col { text-align: right; padding-right: 2px; }
+  .resume-btn {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: transparent;
+    color: var(--ink-dim);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .resume-btn:hover { color: var(--model-sonnet); border-color: var(--model-sonnet); }
+  [data-theme="light"] .resume-btn { border-color: rgba(0,0,0,0.12); }
+  [data-theme="light"] .resume-btn:hover { color: var(--model-sonnet); border-color: var(--model-sonnet); }
+
+  .acct-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+  }
+  .acct-overlay.open { display: flex; }
+  .acct-modal {
+    background: var(--surface-2);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 20px 22px 16px;
+    min-width: 290px;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  [data-theme="light"] .acct-modal { border-color: rgba(0,0,0,0.10); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+  .acct-modal-label {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+  .acct-modal-sid {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+  .acct-btns {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .acct-btn {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.11);
+    background: var(--surface);
+    color: var(--ink-muted);
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .acct-btn:hover { background: rgba(255,255,255,0.06); }
+  .acct-btn.acct-a { border-color: var(--model-sonnet); color: var(--model-sonnet); }
+  .acct-btn.acct-a:hover { background: rgba(130,173,149,0.10); }
+  .acct-btn.acct-b { border-color: var(--model-opus); color: var(--model-opus); }
+  .acct-btn.acct-b:hover { background: rgba(226,106,63,0.10); }
+  .acct-cmd-wrap { display: none; }
+  .acct-cmd-wrap.show { display: block; }
+  .acct-cmd-hint {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    color: var(--ink-dim);
+    margin-bottom: 4px;
+  }
+  .acct-cmd-text {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 4px;
+    padding: 7px 9px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-muted);
+    word-break: break-all;
+    cursor: pointer;
+    user-select: all;
+    line-height: 1.5;
+    transition: border-color 0.12s, color 0.12s;
+  }
+  .acct-cmd-text:hover { border-color: rgba(255,255,255,0.18); color: var(--ink); }
+  .acct-copy-feedback {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    color: var(--model-sonnet);
+    text-align: right;
+    margin-top: 3px;
+    min-height: 14px;
+  }
+  .acct-cancel {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 5px;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    text-align: center;
+  }
+  .acct-cancel:hover { color: var(--ink-muted); }
 
   /* ── Footer ── */
   .footer {
@@ -2882,23 +2946,19 @@
       <div class="pacing-head">
         <span class="pacing-label">Current session</span>
         <span class="pacing-live-badge" id="p5h-live-badge" hidden></span>
-        <button class="chart-unit-coin" data-prefix="p5h" data-unit="usd"
-                aria-label="Toggle dollars or tokens" title="Toggle dollars or tokens">$</button>
+        <div class="chart-unit-toggle" data-prefix="p5h" role="tablist" aria-label="Chart unit">
+          <button data-unit="usd" class="active" role="tab" aria-selected="true">$</button>
+          <button data-unit="tokens" role="tab" aria-selected="false">tok</button>
+        </div>
       </div>
       <!-- Headline row: paired % used · % elapsed at equal weight so
            the key comparison (are you burning faster than the clock?)
            is visible at a glance. End-label (reset time + remaining)
            floats right in the same row. Spent/limit subtitle below. -->
       <div class="pacing-pct">
-        <span class="pacing-pct-col">
-          <span class="pacing-pct-used" id="p5h-pct-used">—</span>
-          <span class="pacing-pct-sublabel">used</span>
-        </span>
-        <span class="pacing-pct-sep" id="p5h-pct-sep">·</span>
-        <span class="pacing-pct-col">
-          <span class="pacing-pct-time" id="p5h-pct-time">—</span>
-          <span class="pacing-pct-sublabel">elapsed</span>
-        </span>
+        <span class="pacing-pct-used" id="p5h-pct-used">—</span>
+        <span class="pacing-pct-sep">·</span>
+        <span class="pacing-pct-time" id="p5h-pct-time">—</span>
         <span class="chart-end-label" id="p5h-end-label"></span>
       </div>
       <div class="pacing-spent">
@@ -2914,19 +2974,15 @@
       <div class="pacing-head">
         <span class="pacing-label">Weekly limit</span>
         <span class="pacing-live-badge" id="pw-live-badge" hidden></span>
-        <button class="chart-unit-coin" data-prefix="pw" data-unit="usd"
-                aria-label="Toggle dollars or tokens" title="Toggle dollars or tokens">$</button>
+        <div class="chart-unit-toggle" data-prefix="pw" role="tablist" aria-label="Chart unit">
+          <button data-unit="usd" class="active" role="tab" aria-selected="true">$</button>
+          <button data-unit="tokens" role="tab" aria-selected="false">tok</button>
+        </div>
       </div>
       <div class="pacing-pct">
-        <span class="pacing-pct-col">
-          <span class="pacing-pct-used" id="pw-pct-used">—</span>
-          <span class="pacing-pct-sublabel">used</span>
-        </span>
-        <span class="pacing-pct-sep" id="pw-pct-sep">·</span>
-        <span class="pacing-pct-col">
-          <span class="pacing-pct-time" id="pw-pct-time">—</span>
-          <span class="pacing-pct-sublabel">elapsed</span>
-        </span>
+        <span class="pacing-pct-used" id="pw-pct-used">—</span>
+        <span class="pacing-pct-sep">·</span>
+        <span class="pacing-pct-time" id="pw-pct-time">—</span>
         <span class="chart-end-label" id="pw-end-label"></span>
       </div>
       <div class="pacing-spent">
@@ -2948,15 +3004,9 @@
         <span class="pacing-live-badge" id="pm-live-badge" hidden></span>
       </div>
       <div class="pacing-pct">
-        <span class="pacing-pct-col">
-          <span class="pacing-pct-used" id="pm-pct-used">—</span>
-          <span class="pacing-pct-sublabel">used</span>
-        </span>
-        <span class="pacing-pct-sep" id="pm-pct-sep">·</span>
-        <span class="pacing-pct-col">
-          <span class="pacing-pct-time" id="pm-pct-time">—</span>
-          <span class="pacing-pct-sublabel">elapsed</span>
-        </span>
+        <span class="pacing-pct-used" id="pm-pct-used">—</span>
+        <span class="pacing-pct-sep">·</span>
+        <span class="pacing-pct-time" id="pm-pct-time">—</span>
         <span class="chart-end-label" id="pm-end-label"></span>
       </div>
       <div class="pacing-spent">
@@ -2976,7 +3026,8 @@
        so the row-3 right column doesn't double-stack. ── -->
       <section class="lever-card heavy-turn-card" data-polish="heavy-turn-card">
       <div class="lever-card-label" data-polish="heavy-turn-label">
-        <span>Context depth makes turns expensive</span>
+        <span>How tokens get burned</span>
+        <span class="lever-card-hint">Token vs turn imbalance · last 7 days</span>
       </div>
       <!-- Guidance `<details>` removed — the data-driven headline, pane
            legend, and per-segment tooltips already explain the story. On
@@ -2999,7 +3050,7 @@
         <div class="heavy-panel heavy-panel--trend">
           <div class="heavy-trend-wrap heavy-trend-wrap--full">
             <div class="heavy-trend-header">
-              <span id="heavy-trend-title"></span>
+              <span id="heavy-trend-title">Daily token mix by context band</span>
               <div class="heavy-trend-toggles">
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Metric</span>
@@ -3132,7 +3183,7 @@
         <p><strong>Reading the trend:</strong> bars show individual days (or weeks, if you toggle Week); the line is a smoothed running average. The two dashed markers point to capability events (1M context turning on, Opus 4.7 launching) — useful anchors for where habits often shift.</p>
         <p><strong>How to spend less:</strong></p>
         <ul>
-          <li><strong>avg ctx, cost/turn</strong> — <code>/compact</code> more often, <code>Grep</code> before <code>Read</code>, hand research to sub-agents so their context doesn't pile onto yours.</li>
+          <li><strong>tokens/turn, cost/turn, avg ctx</strong> — <code>/compact</code> more often, <code>Grep</code> before <code>Read</code>, hand research to sub-agents so their context doesn't pile onto yours.</li>
           <li><strong>cost/day, turns/day</strong> — batch related questions into one prompt; move mechanical work from Opus to Sonnet.</li>
           <li><strong>cache hit %</strong> — above 85% is healthy; below 70% means the session keeps reshaping context each turn.</li>
           <li><strong>opus share</strong> — over 70% is expensive. Sonnet is about 5× cheaper per token for mechanical work at similar quality.</li>
@@ -3141,6 +3192,17 @@
     </details>
     <div class="trends-chart" id="trends" data-polish="trends-chart" role="img" aria-label="Historical daily token usage trends"></div>
     <p class="trends-slider-hint">Tip: drag the range bar under the chart to zoom the x-axis, or hold <kbd>Ctrl</kbd> / <kbd>⌘</kbd> and scroll inside the chart.</p>
+    <div class="trends-caption">
+      <p class="trends-caption-intro">Capability events — where habits often shifted:</p>
+      <p class="trends-caption-row">
+        <span class="trends-caption-swatch trends-caption-swatch--amber"></span>
+        <strong>1M context turned on</strong> — the first day you used more than 200K tokens in one turn, after Anthropic opened up the 1M context window (March 2026).
+      </p>
+      <p class="trends-caption-row">
+        <span class="trends-caption-swatch trends-caption-swatch--sonnet"></span>
+        <strong>Opus 4.7 released</strong> — April 16, 2026, when Opus 4.7 became the default model.
+      </p>
+    </div>
   </div>
 
   <div class="footer">
@@ -3414,7 +3476,7 @@
       cap5hTok = h5.capTok || cap5hTokObserved;
       cap5hSource = 'manual';
     }
-    const h5LiveUtil = rlFiveHour() && rlFiveHour().utilization;
+    const h5LiveUtil = RL_LIVE && RL_LIVE.five_hour && RL_LIVE.five_hour.utilization;
     const h5CurWin = (effective5hWindows() || []).slice(-1)[0];
     const h5Inferred = inferCapFromLive(h5CurWin, h5LiveUtil);
     if (h5Inferred) {
@@ -3432,7 +3494,7 @@
       capWkTok = wk.capTok || capWkTokObserved;
       capWkSource = 'manual';
     }
-    const wkLiveUtil = rlSevenDay() && rlSevenDay().utilization;
+    const wkLiveUtil = RL_LIVE && RL_LIVE.seven_day && RL_LIVE.seven_day.utilization;
     const wkCurWin = (effectiveWkWindows() || []).slice(-1)[0];
     const wkInferred = inferCapFromLive(wkCurWin, wkLiveUtil);
     if (wkInferred) {
@@ -3505,11 +3567,6 @@
   //   2. DATA.rate_limits_live baked in at regen time — stale fallback.
   // Both hit the same Anthropic OAuth usage endpoint; (1) is just fresher.
   let RL_LIVE = DATA.rate_limits_live || null;
-  // Multi-account: when this CLI session is on an enterprise/monthly
-  // account, five_hour/seven_day come back null on /api/rate-limits.
-  // Anything 5h/7d-shaped on the dashboard sources from RL_MAX instead
-  // (the snapshotted personal Max account). Monthly stays on RL_LIVE.
-  let RL_MAX = DATA.rate_limits_max || null;
   // Infer mode from baked data when the field is missing (pre-fix
   // serve.py won't emit it). Keeps initial render in the right mode
   // so we avoid a flash from weekly → monthly when the live fetch lands.
@@ -3518,32 +3575,27 @@
       (RL_LIVE.five_hour || RL_LIVE.seven_day) ? 'windows'
       : RL_LIVE.monthly ? 'monthly' : 'unknown';
   }
-  // 5h/7d accessors prefer RL_MAX (where the populated window data lives
-  // when this CLI session is on an enterprise account).
-  function rlFiveHour() { return (RL_MAX && RL_MAX.five_hour) || (RL_LIVE && RL_LIVE.five_hour) || null; }
-  function rlSevenDay() { return (RL_MAX && RL_MAX.seven_day) || (RL_LIVE && RL_LIVE.seven_day) || null; }
-  let wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || null;
-  let h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || null;
+  let wkResetMsLive = (RL_LIVE && RL_LIVE.seven_day && RL_LIVE.seven_day.resets_at_ms) || null;
+  let h5ResetMsLive = (RL_LIVE && RL_LIVE.five_hour && RL_LIVE.five_hour.resets_at_ms) || null;
 
   function renderLiveBadges() {
-    function ageStr(fetched_ms) {
-      if (!fetched_ms) return 'unknown';
-      const m = Math.floor((Date.now() - fetched_ms) / 60000);
-      return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m/60)}h ago`;
-    }
-    // 5h + 7d badges age-tag against RL_MAX (where the data lives).
-    if (rlFiveHour()) {
+    if (!RL_LIVE || !RL_LIVE.fetched_at_ms) return;
+    const ageMin = Math.floor((Date.now() - RL_LIVE.fetched_at_ms) / 60000);
+    // Age label only — the "live" prefix was redundant with "just now".
+    const ageLabel = ageMin < 1 ? 'just now'
+                   : ageMin < 60 ? `${ageMin}m ago`
+                   : `${Math.floor(ageMin/60)}h ago`;
+    if (RL_LIVE.five_hour) {
       const b = document.getElementById('p5h-live-badge');
-      if (b) { b.textContent = `${ageStr(RL_MAX && RL_MAX.fetched_at_ms)} · ${rlFiveHour().utilization.toFixed(0)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageLabel} · ${RL_LIVE.five_hour.utilization.toFixed(0)}%`; b.hidden = false; }
     }
-    if (rlSevenDay()) {
+    if (RL_LIVE.seven_day) {
       const b = document.getElementById('pw-live-badge');
-      if (b) { b.textContent = `${ageStr(RL_MAX && RL_MAX.fetched_at_ms)} · ${rlSevenDay().utilization.toFixed(0)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageLabel} · ${RL_LIVE.seven_day.utilization.toFixed(0)}%`; b.hidden = false; }
     }
-    // Monthly badge stays on RL_LIVE (enterprise extra_usage pool).
-    if (RL_LIVE && RL_LIVE.monthly) {
+    if (RL_LIVE.monthly) {
       const b = document.getElementById('pm-live-badge');
-      if (b) { b.textContent = `${ageStr(RL_LIVE.fetched_at_ms)} · ${RL_LIVE.monthly.utilization.toFixed(1)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageLabel} · ${RL_LIVE.monthly.utilization.toFixed(1)}%`; b.hidden = false; }
     }
   }
 
@@ -3560,10 +3612,8 @@
       const el = document.getElementById(id);
       if (el) el.setAttribute('data-has-source', has ? 'true' : 'false');
     };
-    // 5h + 7d may live on RL_MAX (Max account) when this CLI session is
-    // on enterprise; check both. Monthly stays on RL_LIVE only.
-    set('pacing-5h',      !!rlFiveHour());
-    set('pacing-week',    !!rlSevenDay());
+    set('pacing-5h',      !!(rl && rl.five_hour));
+    set('pacing-week',    !!(rl && rl.seven_day));
     set('pacing-monthly', !!(rl && rl.monthly));
     // After data-has-source is set, sync the manual pill toggles + apply
     // the user's saved show/hide preference. Pills only render for cards
@@ -3639,6 +3689,9 @@
     .then(fresh => {
       if (!fresh || fresh.error) return;
       RL_LIVE = fresh;
+      wkResetMsLive = (fresh.seven_day && fresh.seven_day.resets_at_ms) || wkResetMsLive;
+      h5ResetMsLive = (fresh.five_hour && fresh.five_hour.resets_at_ms) || h5ResetMsLive;
+      renderLiveBadges();
       // If the live endpoint pre-dates the mode field (old server),
       // infer mode from the data rather than clobbering the baked-in value.
       const freshMode = fresh.mode ||
@@ -3647,30 +3700,12 @@
       // Write the resolved mode back onto RL_LIVE so pwRenderArgs() and
       // any other downstream consumers see a consistent value.
       RL_LIVE.mode = freshMode;
-      // Reset anchors / badges may have shifted via the rlFiveHour() /
-      // rlSevenDay() accessors when both payloads are present — refresh.
-      wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || wkResetMsLive;
-      h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || h5ResetMsLive;
-      renderLiveBadges();
+      // Refresh per-card visibility based on what's now populated in RL_LIVE.
       refreshPacingVisibility(RL_LIVE);
+      // Re-render pacing so chart anchors snap to fresh reset timestamps
       if (typeof rerenderPacing === 'function') rerenderPacing();
     })
     .catch(() => { /* endpoint unavailable — silent fallback to baked data */ });
-
-  // Parallel fetch for the secondary (Max) account. Same fire-and-forget
-  // pattern. This is what populates 5h/7d on enterprise/monthly accounts —
-  // the keychain's primary OAuth token has those fields null.
-  fetch('/api/rate-limits-max', { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
-    .then(fresh => {
-      if (!fresh || fresh.error) return;
-      RL_MAX = fresh;
-      wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || wkResetMsLive;
-      h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || h5ResetMsLive;
-      renderLiveBadges();
-      if (typeof rerenderPacing === 'function') rerenderPacing();
-    })
-    .catch(() => { /* snapshot missing or refresh failed — keep baked data */ });
 
   // Fire-and-forget live pacing refresh from the local dev server.
   // Patches the 5h window cost in anchored5h with fresh JSONL data so
@@ -3862,12 +3897,10 @@
     // number Anthropic is tracking you against. Falls back to the
     // derived cost/cap ratio when live data isn't available.
     const liveUtil = (prefix === 'p5h')
-      ? (rlFiveHour() && rlFiveHour().utilization)
+      ? (RL_LIVE && RL_LIVE.five_hour && RL_LIVE.five_hour.utilization)
       : (prefix === 'pw')
-        ? (rlSevenDay() && rlSevenDay().utilization)
-        : (prefix === 'pm')
-          ? (RL_LIVE && RL_LIVE.monthly && RL_LIVE.monthly.utilization)
-          : null;
+        ? (RL_LIVE && RL_LIVE.seven_day && RL_LIVE.seven_day.utilization)
+        : null;
     const pctUsed = (liveUtil != null) ? liveUtil : pctDerived;
 
     // Headline: big "21% used" with a precise spent/limit subtitle
@@ -3884,38 +3917,16 @@
       ? 'of ' + capStr + ' implied limit'
       : 'limit not yet inferred';
 
-    // % used row: bare percentage keeps the span short enough to avoid
-    // wrapping when all three cards are visible. Card title + chart carry
-    // the "used vs elapsed" context.
+    // % used row: big number leads, subtitle qualifies.
     if ($('pct-used')) {
       $('pct-used').textContent = (cap > 0 || liveUtil != null)
-        ? pctUsed.toFixed(0) + '%'
+        ? pctUsed.toFixed(0) + '% used'
         : '—';
     }
+    // Elapsed sits next to `% used` as the pacing comparison. Short
+    // form — the card title already tells you which window it is.
     if ($('pct-time')) {
-      $('pct-time').textContent = pctTime.toFixed(0) + '%';
-    }
-    // Comparison glyph between % used and % elapsed. Was a static "·"
-    // separator; now signals whether you're under pace ("<", green) or
-    // over (">", yellow → red by magnitude). Same severity scale as
-    // the pace-line gradient. Muted "·" when no live data.
-    if ($('pct-sep')) {
-      const sep = $('pct-sep');
-      const haveData = (cap > 0 || liveUtil != null);
-      if (!haveData) {
-        sep.textContent = '·';
-        sep.style.color = '';
-      } else {
-        const delta = pctUsed - pctTime;  // percentage points; positive = over pace
-        if (delta <= 0) {
-          sep.textContent = '<';
-          sep.style.color = T.sonnet;
-        } else {
-          sep.textContent = '>';
-          // Map 0..20pp over → warn..crit. Beyond 20pp clamps to crit.
-          sep.style.color = (delta < 10) ? T.warn : T.crit;
-        }
-      }
+      $('pct-time').textContent = pctTime.toFixed(0) + '% elapsed';
     }
 
     // Meta line is only populated for the EXPIRED state now —
@@ -3976,10 +3987,7 @@
     // as "light green" regardless of the data's actual extent.
     let yMin = 0, yMax = 0;
     if (cap > 0 && cumPts.length) {
-      // Include idlePts so the idle-tail decay never falls off the bottom
-      // of the frame (e.g. 16% used at 80% elapsed → delta ≈ −64% cap).
-      const allPts = [...cumPts, ...idlePts];
-      const deltas = allPts.map(p => p[1]);
+      const deltas = cumPts.map(p => p[1]);
       const dMin = Math.min(...deltas, 0);
       const dMax = Math.max(...deltas, 0);
       const range = Math.max(dMax - dMin, cap * 0.02);
@@ -4312,11 +4320,8 @@
             cap: 'butt',
           },
           z: 1.3,
-          // Small "23%" label below the progress-bar tip, labeling
-          // the elapsed-time value visually tied to the bar. Sits BELOW
-          // the baseline so it never crowds the reset icon at [win.end,
-          // yMax] when pctTime is high (98% of week → elapsed-tip ≈ reset
-          // icon column → label collision was happening at top position).
+          // Small "23%" label above the progress-bar tip, labeling
+          // the elapsed-time value visually tied to the bar.
           markPoint: active ? {
             symbol: 'circle',
             symbolSize: 0,
@@ -4327,7 +4332,7 @@
               label: {
                 show: true,
                 formatter: Math.round(pctTime) + '%',
-                position: 'bottom',
+                position: 'top',
                 distance: 4,
                 color: T.inkMuted,
                 fontFamily: T.mono,
@@ -4496,6 +4501,10 @@
           value: avg(recent, 'cost'), prior: avg(prior, 'cost'),
           fmt: fmtUsd, deltaDir: 'up',
           baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
+        { id: 'tokens_per_turn', metric: 'tokens_per_turn', label: 'tokens / turn',
+          value: avg(recent, 'tokens_per_turn'), prior: avg(prior, 'tokens_per_turn'),
+          fmt: fmtNum, deltaDir: 'up',
+          baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
         { id: 'cost_per_turn', metric: 'cost_per_turn', label: 'cost / turn',
           value: avg(recent, 'cost_per_turn'), prior: avg(prior, 'cost_per_turn'),
           fmt: v => '$' + v.toFixed(3), deltaDir: 'up',
@@ -4526,6 +4535,7 @@
     const r24 = aggregateTurnsRange(nowMs - H24, nowMs, turns);
     const pTurns = avg(prior, 'turns');
     const pCost = avg(prior, 'cost');
+    const pTpt = avg(prior, 'tokens_per_turn');
     const pCpt = avg(prior, 'cost_per_turn');
     const pAvgCtx = avg(prior, 'avg_ctx');
     const pCache = avg(prior, 'cache_hit_rate');
@@ -4541,6 +4551,10 @@
       { id: 'cost', metric: 'cost', label: 'cost (24h)',
         value: r24.cost, prior: pCost,
         fmt: fmtUsd, deltaDir: 'up',
+        baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
+      { id: 'tokens_per_turn', metric: 'tokens_per_turn', label: 'tokens / turn',
+        value: r24.tokens_per_turn, prior: pTpt,
+        fmt: fmtNum, deltaDir: 'up',
         baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
       { id: 'cost_per_turn', metric: 'cost_per_turn', label: 'cost / turn',
         value: r24.cost_per_turn, prior: pCpt,
@@ -4585,6 +4599,7 @@
   // encodes the metric's family:
   //   turns/day      — steel blue   (neutral volume · haiku-ish)
   //   cost/day       — gold/amber   (budget · warn hue)
+  //   tokens/turn    — pumpkin      (intensity heat)
   //   cost/turn      — red-orange   (intensity + cost signal)
   //   avg ctx        — indigo       (cognitive load, distinct)
   //   cache hit      — teal/green   (efficiency · good)
@@ -4592,6 +4607,7 @@
   const METRIC_COLORS = {
     turns:           '#6b8ec4',
     cost:            '#d4a34d',
+    tokens_per_turn: '#e08a4d',
     cost_per_turn:   '#cf4f3c',
     avg_ctx:         '#b07df0',
     cache_hit_rate:  '#5cc4b5',
@@ -4719,6 +4735,7 @@
     // name reads as the same metric the user just clicked. `line`
     // pulls from METRIC_COLORS so the bar/line matches the tile color.
     const METRICS = {
+      tokens_per_turn: { label: 'tokens / turn', fmt: fmtNum, line: METRIC_COLORS.tokens_per_turn, get: d => d.tokens_per_turn },
       cost_per_turn:   { label: 'cost / turn',   fmt: v => '$' + (v < 0.01 ? v.toFixed(3) : v.toFixed(2)), line: METRIC_COLORS.cost_per_turn, get: d => d.cost_per_turn },
       cost:            { label: 'cost / day',    fmt: fmtUsd, line: METRIC_COLORS.cost, get: d => d.cost },
       avg_ctx:         { label: 'avg ctx',       fmt: fmtNum, line: METRIC_COLORS.avg_ctx, get: d => d.avg_ctx },
@@ -4826,7 +4843,7 @@
     // date (it will for any regen after 2026-04-16).
     const showOpus47Marker = todayPT >= OPUS_47_RELEASE;
 
-    let currentMetric = 'avg_ctx';
+    let currentMetric = 'tokens_per_turn';
     let currentGranularity = 'day';   // 'day' | 'week'
     // Persist dataZoom state across metric + granularity changes so
     // editing the slider once doesn't get reset on every tile click.
@@ -5067,8 +5084,8 @@
         ],
       }, true);
     }
-    renderTrends('avg_ctx', 'day');
-    highlightMetricTile('avg_ctx');
+    renderTrends('tokens_per_turn', 'day');
+    highlightMetricTile('tokens_per_turn');
 
     // Persist dataZoom range — capture whatever the user drags the
     // slider to, then replay it when renderTrends runs after a metric
@@ -6447,13 +6464,13 @@
                legend always off so the trend chart owns its full vertical
                band and labels never collide with toggle controls. */
             legend: { show: false },
-            /* Plot edges match the ribbon SVG above (barStartX=0/1000 = 0%).
+            /* Plot edges match the mekko SVG above (barStartX=20/1000 = 2%).
                containLabel:false keeps the left edge fixed; y-axis labels
                float inside via axisLabel.inside:true. Bottom must accommodate
                x-axis labels without containLabel. */
             grid: {
               top: 26,
-              left: 0,
+              left: '2%',
               right: '2%',
               bottom: 24,
               containLabel: false,
@@ -6533,6 +6550,9 @@
               const inWindow = (d) => d && days.length && d >= days[0] && d <= days[days.length - 1];
               const markData = [];
               if (isTop) {
+                /* markLine event labels — pinned ABOVE the plot so they
+                   never sit on top of the dense stacked areas. 11px floor
+                   restored per labeling guide hard floor. */
                 if (firstOneMDay && inWindow(firstOneMDay)) {
                   markData.push({
                     xAxis: firstOneMDay,
@@ -6541,6 +6561,7 @@
                       color: T.warn, fontFamily: T.mono,
                       fontSize: 11, fontWeight: 700,
                       position: 'end',
+                      distance: 4,
                       formatter: '1M ctx',
                       backgroundColor: T.bg,
                       padding: [3, 7], lineHeight: 13,
@@ -6556,6 +6577,7 @@
                       color: T.sonnet, fontFamily: T.mono,
                       fontSize: 11, fontWeight: 700,
                       position: 'end',
+                      distance: 4,
                       formatter: 'Opus 4.7',
                       backgroundColor: T.bg,
                       padding: [3, 7], lineHeight: 13,
@@ -6658,15 +6680,16 @@
 
     // Port of Python's aggregate_sessions(): group DATA.turns by sid,
     // filter by lookback window, sort by max_ctx desc, take top N.
-    // Filters out light sessions (max_ctx < HEAVY_THRESHOLD). 200K is
-    // where premium pricing kicks in and context management starts to
-    // matter — includes monitor + consider + compact-now + reset tiers.
-    const HEAVY_THRESHOLD = 200_000;
+    // Filters out light sessions (max_ctx < HEAVY_THRESHOLD) so the
+    // list stays focused on actionable heavy sessions — "ok" and
+    // "monitor" tiers are noise here.
+    const HEAVY_THRESHOLD = 500_000;
     function aggregateSessionsJS(lookbackMs) {
       const cutoff = now - lookbackMs;
       const buckets = new Map();
       for (const t of turns) {
         if (t.ts < cutoff) continue;
+        if (t.t === 'headless') continue;  // exclude SDK/headless sessions
         let b = buckets.get(t.s);
         if (!b) {
           b = {
@@ -6703,43 +6726,20 @@
       return out.slice(0, TOP_N);
     }
 
-    // Sort state: col key + direction. Default: max_ctx desc (heaviest first).
-    const TIER_ORDER = { reset: 4, 'compact-now': 3, consider: 2, monitor: 1, ok: 0 };
-    let sessSort = { col: 'max_ctx', dir: -1 };
-    let sessRange = '7d';
-
-    function sortSessions(arr) {
-      const { col, dir } = sessSort;
-      return arr.slice().sort((a, b) => {
-        let va, vb;
-        if (col === 'action') {
-          va = TIER_ORDER[recommendation(a.max_ctx)[0]] ?? 0;
-          vb = TIER_ORDER[recommendation(b.max_ctx)[0]] ?? 0;
-        } else if (col === 'idle_ms') {
-          va = a.idle_ms; vb = b.idle_ms;
-        } else if (col === 'sid') {
-          va = a.sid; vb = b.sid;
-          return dir * va.localeCompare(vb);
-        } else {
-          va = a[col] ?? 0; vb = b[col] ?? 0;
-        }
-        return dir * (va - vb);
-      });
-    }
-
     function renderSessions(range) {
       if (!sessHost) return;
-      sessRange = range || sessRange;
-      const lookback = RANGE_MS[sessRange] || RANGE_MS['7d'];
-      const raw = aggregateSessionsJS(lookback);
-      const sessions = sortSessions(raw);
-      if (sessLabel) sessLabel.textContent = RANGE_LABEL[sessRange] || RANGE_LABEL['7d'];
+      const lookback = RANGE_MS[range] || RANGE_MS['7d'];
+      const sessions = aggregateSessionsJS(lookback);
+      if (sessLabel) sessLabel.textContent = RANGE_LABEL[range] || RANGE_LABEL['7d'];
       if (!sessions.length) {
-        sessHost.innerHTML = '<div class="session-empty">no sessions above 200K context in the ' + (RANGE_LABEL[sessRange] || 'last 7 days') + ' — you\'re running lean</div>';
+        sessHost.innerHTML = '<div class="session-empty">no sessions topped 500K context in the ' + (RANGE_LABEL[range] || 'last 7 days') + ' — you\'re running lean</div>';
         return;
       }
       const rows = sessions.map(s => {
         const [cls, label] = recommendation(s.max_ctx);
+        // Tier class stays on the max-ctx cell too so the number
+        // itself reads hot/cool at a glance — redundant with the
+        // action pill but useful when scanning fast.
         return (
           '<tr>' +
             '<td class="sid">' + s.sid + '</td>' +
@@ -6747,45 +6747,25 @@
             '<td class="num max-ctx tier-' + cls + '">' + fmtK_(s.max_ctx) + '</td>' +
             '<td class="num">' + fmtK_(s.total_ctx) + '</td>' +
             '<td class="ago">' + fmtAgo_(s.idle_ms) + '</td>' +
+            '<td class="resume-col"><button class="resume-btn" data-sid="' + s.sid + '">resume</button></td>' +
           '</tr>'
         );
       }).join('');
-
-      const thClass = (col, extra) => {
-        const isSorted = sessSort.col === col;
-        const cls = ['sortable', extra, isSorted ? (sessSort.dir < 0 ? 'sort-desc' : 'sort-asc') : '']
-          .filter(Boolean).join(' ');
-        return 'class="' + cls + '" data-sort-col="' + col + '"';
-      };
-
       sessHost.innerHTML =
         '<div class="session-scroll"><table class="session-table">' +
           '<thead><tr>' +
-            '<th ' + thClass('sid', '') + '>session</th>' +
-            '<th ' + thClass('action', '') + '>action</th>' +
-            '<th ' + thClass('max_ctx', 'num') + '>max ctx</th>' +
-            '<th ' + thClass('total_ctx', 'num') + '>total ctx</th>' +
-            '<th ' + thClass('idle_ms', '') + '>last turn</th>' +
+            '<th>session</th>' +
+            '<th>action</th>' +
+            '<th class="num">max ctx</th>' +
+            '<th class="num">total ctx</th>' +
+            '<th>last turn</th>' +
+            '<th></th>' +
           '</tr></thead>' +
           '<tbody>' + rows + '</tbody>' +
         '</table></div>';
-
-      // Wire sort clicks
-      sessHost.querySelectorAll('th[data-sort-col]').forEach(th => {
-        th.addEventListener('click', () => {
-          const col = th.dataset.sortCol;
-          if (sessSort.col === col) {
-            sessSort.dir *= -1;
-          } else {
-            sessSort.col = col;
-            sessSort.dir = (col === 'idle_ms' || col === 'sid') ? 1 : -1;
-          }
-          renderSessions();
-        });
-      });
     }
 
-    // Initial render at 7d
+    // Initial render at 7d to match the previous behavior
     renderSessions('7d');
 
     // Wire the toggle
@@ -6804,33 +6784,119 @@
     }
   })();
 
+  // ── Account picker modal (resume session with correct account) ──
+  // Replace ACCOUNT_A_TOKEN and ACCOUNT_B_TOKEN with actual OAuth accessToken
+  // strings from macOS Keychain. The resume command reads current creds,
+  // patches only accessToken, writes back, then runs `claude --resume <sid>`.
+  (function initAccountPicker() {
+    const ACCOUNTS = {
+      A: { label: 'Account A', token: 'ACCOUNT_A_TOKEN' },
+      B: { label: 'Account B', token: 'ACCOUNT_B_TOKEN' },
+    };
 
-  // Per-chart unit coin ($ ↔ tok) — single-button toggle, theme-toggle pattern.
-  // The visible glyph reflects the CURRENT unit; clicking flips state and
-  // rebuilds just that card's chart. Each card is independent.
-  document.querySelectorAll('.chart-unit-coin').forEach(coin => {
-    const prefix = coin.dataset.prefix;
-    coin.addEventListener('click', () => {
-      const next = coin.dataset.unit === 'usd' ? 'tokens' : 'usd';
-      coin.dataset.unit = next;
-      coin.textContent = next === 'usd' ? '$' : 'T';
-      chartUnit[prefix] = next;
-      // Rebuild just this card's chart
-      const eff2 = effectiveCaps();
-      if (prefix === 'p5h') {
-        if (p5hChart) p5hChart.dispose();
-        p5hChart = renderPacing('p5h', FIVE_HRS, effective5hWindows(), eff2.cap5hUsd, eff2.cap5hTok);
-        if (p5hChart) hookResize(p5hChart, document.getElementById('p5h-chart'));
-      } else if (prefix === 'pw') {
-        if (pwChart) pwChart.dispose();
-        pwChart = renderPacing('pw', SEVEN_DAYS, effectiveWkWindows(), eff2.capWkUsd, eff2.capWkTok);
-        if (pwChart) hookResize(pwChart, document.getElementById('pw-chart'));
-      } else if (prefix === 'pm') {
-        if (pmChart) pmChart.dispose();
-        const pmArgs3 = pmRenderArgs();
-        pmChart = pmArgs3 ? renderPacing('pm', ...pmArgs3) : null;
-        if (pmChart) hookResize(pmChart, document.getElementById('pm-chart'));
-      }
+    const overlay  = document.getElementById('acct-overlay');
+    const sidEl    = document.getElementById('acct-modal-sid');
+    const cmdWrap  = document.getElementById('acct-cmd-wrap');
+    const cmdText  = document.getElementById('acct-cmd-text');
+    const feedback = document.getElementById('acct-copy-feedback');
+    const cancelEl = document.getElementById('acct-modal-cancel');
+    const btnA     = document.getElementById('acct-btn-a');
+    const btnB     = document.getElementById('acct-btn-b');
+    if (!overlay) return;
+
+    let activeSid = '';
+
+    function openModal(sid) {
+      activeSid = sid;
+      sidEl.textContent = sid;
+      cmdWrap.classList.remove('show');
+      feedback.textContent = '';
+      overlay.classList.add('open');
+    }
+
+    function closeModal() {
+      overlay.classList.remove('open');
+      activeSid = '';
+    }
+
+    function buildCmd(key) {
+      const tok = ACCOUNTS[key].token;
+      // Inline Python: read keychain JSON → patch accessToken → write back → resume
+      const py = [
+        'import subprocess,json',
+        "c=json.loads(subprocess.run(['security','find-generic-password','-s','Claude Code-credentials','-w'],capture_output=True,text=True).stdout)",
+        `c.setdefault('claudeAiOauth',{})['accessToken']='${tok}'`,
+        "subprocess.run(['security','add-generic-password','-U','-s','Claude Code-credentials','-w',json.dumps(c)])",
+      ].join(';');
+      return `python3 -c "${py}" && claude --resume ${activeSid}`;
+    }
+
+    function selectAccount(key) {
+      cmdText.textContent = buildCmd(key);
+      cmdWrap.classList.add('show');
+      feedback.textContent = '';
+    }
+
+    if (btnA) btnA.addEventListener('click', () => selectAccount('A'));
+    if (btnB) btnB.addEventListener('click', () => selectAccount('B'));
+    if (cancelEl) cancelEl.addEventListener('click', closeModal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+    // Delegated click on dynamically rendered resume buttons
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.resume-btn');
+      if (!btn) return;
+      openModal(btn.dataset.sid);
+    });
+
+    // Click-to-copy the generated command
+    if (cmdText) {
+      cmdText.addEventListener('click', () => {
+        navigator.clipboard.writeText(cmdText.textContent).then(() => {
+          feedback.textContent = '✓ copied';
+          setTimeout(() => { feedback.textContent = ''; }, 2000);
+        }).catch(() => {
+          // Fallback: select all text
+          const r = document.createRange();
+          r.selectNodeContents(cmdText);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+        });
+      });
+    }
+  })();
+
+  // Per-chart unit toggle ($/tok) — each card independent
+  document.querySelectorAll('.chart-unit-toggle').forEach(toggle => {
+    const prefix = toggle.dataset.prefix;
+    toggle.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const unit = btn.dataset.unit;
+        if (chartUnit[prefix] === unit) return;
+        chartUnit[prefix] = unit;
+        toggle.querySelectorAll('button').forEach(b => {
+          const active = b.dataset.unit === unit;
+          b.classList.toggle('active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        // Rebuild just this card's chart
+        const eff2 = effectiveCaps();
+        if (prefix === 'p5h') {
+          if (p5hChart) p5hChart.dispose();
+          p5hChart = renderPacing('p5h', FIVE_HRS, effective5hWindows(), eff2.cap5hUsd, eff2.cap5hTok);
+          if (p5hChart) hookResize(p5hChart, document.getElementById('p5h-chart'));
+        } else if (prefix === 'pw') {
+          if (pwChart) pwChart.dispose();
+          pwChart = renderPacing('pw', SEVEN_DAYS, effectiveWkWindows(), eff2.capWkUsd, eff2.capWkTok);
+          if (pwChart) hookResize(pwChart, document.getElementById('pw-chart'));
+        } else if (prefix === 'pm') {
+          if (pmChart) pmChart.dispose();
+          const pmArgs3 = pmRenderArgs();
+          pmChart = pmArgs3 ? renderPacing('pm', ...pmArgs3) : null;
+          if (pmChart) hookResize(pmChart, document.getElementById('pm-chart'));
+        }
+      });
     });
   });
 
@@ -6851,7 +6917,7 @@
     if (!btn) return;
 
     const PREVIEW_COLS = ['day','turns','cost','tokens','avg_ctx','cache_hit_rate',
-                          'opus','sonnet','haiku','cost_per_turn'];
+                          'opus','sonnet','haiku','cost_per_turn','tokens_per_turn'];
     const PREVIEW_ROWS = 8;
 
     function buildCsv(rows) {
@@ -6959,5 +7025,23 @@
   white-space: nowrap; display: none; line-height: 1.6;
   box-shadow: 0 4px 20px rgba(0,0,0,0.7);
 "></div>
+
+<!-- Account picker modal — resume a session under a specific account -->
+<div class="acct-overlay" id="acct-overlay">
+  <div class="acct-modal">
+    <div class="acct-modal-label">Resume session</div>
+    <div class="acct-modal-sid" id="acct-modal-sid"></div>
+    <div class="acct-btns">
+      <button class="acct-btn acct-a" id="acct-btn-a">Account A</button>
+      <button class="acct-btn acct-b" id="acct-btn-b">Account B</button>
+    </div>
+    <div class="acct-cmd-wrap" id="acct-cmd-wrap">
+      <div class="acct-cmd-hint">paste in terminal ↓</div>
+      <div class="acct-cmd-text" id="acct-cmd-text"></div>
+      <div class="acct-copy-feedback" id="acct-copy-feedback"></div>
+    </div>
+    <button class="acct-cancel" id="acct-modal-cancel">cancel</button>
+  </div>
+</div>
 </body>
 </html>
