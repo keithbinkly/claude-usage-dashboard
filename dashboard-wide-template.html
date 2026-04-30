@@ -15,7 +15,7 @@
      script in <head>; the rest of theme logic runs after body parses. */
   (function () {
     try {
-      if (localStorage.getItem('cum-theme') !== 'dark') {
+      if (localStorage.getItem('cum-theme') === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
       }
     } catch (e) { /* localStorage blocked — no-op, stay on dark default */ }
@@ -1526,7 +1526,7 @@
      text. */
   .metric-strip {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 0;
     margin: 8px 0 14px;
     border-top: 1px solid var(--tint-strong);
@@ -1621,10 +1621,10 @@
     background: color-mix(in srgb, var(--tile-color) 10%, transparent);
   }
   .metric-tile-label {
-    font: 500 10px/1.1 var(--mono);
+    font: 500 11px/1.1 var(--mono);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--ink-dim);
+    color: var(--ink-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1647,7 +1647,7 @@
   }
   .metric-tile-value {
     display: block;
-    font: 700 18px/1.15 var(--mono);
+    font: 700 20px/1.15 var(--mono);
     font-variant-numeric: tabular-nums;
     color: var(--ink);
     letter-spacing: -0.01em;
@@ -3987,7 +3987,8 @@
     // as "light green" regardless of the data's actual extent.
     let yMin = 0, yMax = 0;
     if (cap > 0 && cumPts.length) {
-      const deltas = cumPts.map(p => p[1]);
+      const allPts = [...cumPts, ...idlePts];
+      const deltas = allPts.map(p => p[1]);
       const dMin = Math.min(...deltas, 0);
       const dMax = Math.max(...deltas, 0);
       const range = Math.max(dMax - dMin, cap * 0.02);
@@ -4501,10 +4502,6 @@
           value: avg(recent, 'cost'), prior: avg(prior, 'cost'),
           fmt: fmtUsd, deltaDir: 'up',
           baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
-        { id: 'tokens_per_turn', metric: 'tokens_per_turn', label: 'tokens / turn',
-          value: avg(recent, 'tokens_per_turn'), prior: avg(prior, 'tokens_per_turn'),
-          fmt: fmtNum, deltaDir: 'up',
-          baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
         { id: 'cost_per_turn', metric: 'cost_per_turn', label: 'cost / turn',
           value: avg(recent, 'cost_per_turn'), prior: avg(prior, 'cost_per_turn'),
           fmt: v => '$' + v.toFixed(3), deltaDir: 'up',
@@ -4535,7 +4532,6 @@
     const r24 = aggregateTurnsRange(nowMs - H24, nowMs, turns);
     const pTurns = avg(prior, 'turns');
     const pCost = avg(prior, 'cost');
-    const pTpt = avg(prior, 'tokens_per_turn');
     const pCpt = avg(prior, 'cost_per_turn');
     const pAvgCtx = avg(prior, 'avg_ctx');
     const pCache = avg(prior, 'cache_hit_rate');
@@ -4551,10 +4547,6 @@
       { id: 'cost', metric: 'cost', label: 'cost (24h)',
         value: r24.cost, prior: pCost,
         fmt: fmtUsd, deltaDir: 'up',
-        baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
-      { id: 'tokens_per_turn', metric: 'tokens_per_turn', label: 'tokens / turn',
-        value: r24.tokens_per_turn, prior: pTpt,
-        fmt: fmtNum, deltaDir: 'up',
         baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
       { id: 'cost_per_turn', metric: 'cost_per_turn', label: 'cost / turn',
         value: r24.cost_per_turn, prior: pCpt,
@@ -4607,7 +4599,6 @@
   const METRIC_COLORS = {
     turns:           '#6b8ec4',
     cost:            '#d4a34d',
-    tokens_per_turn: '#e08a4d',
     cost_per_turn:   '#cf4f3c',
     avg_ctx:         '#b07df0',
     cache_hit_rate:  '#5cc4b5',
@@ -4735,7 +4726,6 @@
     // name reads as the same metric the user just clicked. `line`
     // pulls from METRIC_COLORS so the bar/line matches the tile color.
     const METRICS = {
-      tokens_per_turn: { label: 'tokens / turn', fmt: fmtNum, line: METRIC_COLORS.tokens_per_turn, get: d => d.tokens_per_turn },
       cost_per_turn:   { label: 'cost / turn',   fmt: v => '$' + (v < 0.01 ? v.toFixed(3) : v.toFixed(2)), line: METRIC_COLORS.cost_per_turn, get: d => d.cost_per_turn },
       cost:            { label: 'cost / day',    fmt: fmtUsd, line: METRIC_COLORS.cost, get: d => d.cost },
       avg_ctx:         { label: 'avg ctx',       fmt: fmtNum, line: METRIC_COLORS.avg_ctx, get: d => d.avg_ctx },
@@ -4843,7 +4833,7 @@
     // date (it will for any regen after 2026-04-16).
     const showOpus47Marker = todayPT >= OPUS_47_RELEASE;
 
-    let currentMetric = 'tokens_per_turn';
+    let currentMetric = 'avg_ctx';
     let currentGranularity = 'day';   // 'day' | 'week'
     // Persist dataZoom state across metric + granularity changes so
     // editing the slider once doesn't get reset on every tile click.
@@ -5084,8 +5074,8 @@
         ],
       }, true);
     }
-    renderTrends('tokens_per_turn', 'day');
-    highlightMetricTile('tokens_per_turn');
+    renderTrends('avg_ctx', 'day');
+    highlightMetricTile('avg_ctx');
 
     // Persist dataZoom range — capture whatever the user drags the
     // slider to, then replay it when renderTrends runs after a metric
@@ -6917,7 +6907,7 @@
     if (!btn) return;
 
     const PREVIEW_COLS = ['day','turns','cost','tokens','avg_ctx','cache_hit_rate',
-                          'opus','sonnet','haiku','cost_per_turn','tokens_per_turn'];
+                          'opus','sonnet','haiku','cost_per_turn'];
     const PREVIEW_ROWS = 8;
 
     function buildCsv(rows) {
