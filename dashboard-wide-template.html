@@ -7033,5 +7033,284 @@
     <button class="acct-cancel" id="acct-modal-cancel">cancel</button>
   </div>
 </div>
+<!-- ─── Dashboard Tour ────────────────────────────────────────────────────
+     Spotlight guide. Selector-driven — update STEPS when layout changes.
+     Auto-starts with ?tour in URL. Button always available bottom-right.
+  ──────────────────────────────────────────────────────────────────────── -->
+<style>
+  #tour-launch-btn {
+    position: fixed; bottom: 22px; right: 22px; z-index: 900;
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 16px; border-radius: 20px;
+    background: var(--ink); color: var(--bg);
+    font: 600 11px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+    border: none; cursor: pointer;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.28);
+    transition: opacity 150ms;
+  }
+  #tour-launch-btn:hover { opacity: 0.82; }
+  #tour-launch-btn.t-hidden { display: none; }
+
+  /* Spotlight: fixed div matching target rect; box-shadow is the overlay */
+  #tour-hl {
+    position: fixed; z-index: 1000; pointer-events: none;
+    border-radius: 9px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.56);
+    outline: 2px solid rgba(255,255,255,0.16);
+    transition: top 260ms ease, left 260ms ease,
+                width 260ms ease, height 260ms ease, opacity 180ms;
+  }
+  #tour-hl.t-hidden { opacity: 0; box-shadow: none; outline: none; }
+
+  /* Popover */
+  #tour-pop {
+    position: fixed; z-index: 1001; width: 310px;
+    padding: 18px 20px 14px;
+    background: var(--surface, #1a1824); color: var(--ink);
+    border: 1px solid var(--tint-strong);
+    border-radius: 12px;
+    box-shadow: 0 10px 36px rgba(0,0,0,0.38);
+    transition: opacity 180ms, transform 180ms;
+  }
+  #tour-pop.t-hidden { opacity: 0; pointer-events: none; transform: translateY(5px); }
+  #tour-pop-step  { font: 500 10px/1 var(--mono); color: var(--ink-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  #tour-pop-title { font: 700 15px/1.25 var(--sans, system-ui, sans-serif); color: var(--ink); margin-bottom: 8px; }
+  #tour-pop-body  { font: 400 13px/1.65 var(--sans, system-ui, sans-serif); color: var(--ink-muted); margin-bottom: 14px; }
+  #tour-pop-body strong { color: var(--ink); font-weight: 600; }
+  #tour-pop-body code   { font-family: var(--mono); font-size: 12px; opacity: 0.85; }
+  .tour-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tour-nav-btns { display: flex; gap: 6px; }
+  .tour-nav-btn {
+    padding: 6px 13px; border-radius: 6px;
+    border: 1px solid var(--tint-strong);
+    background: transparent; color: var(--ink); cursor: pointer;
+    font: 600 11px/1 var(--mono); letter-spacing: 0.03em;
+    transition: background 120ms;
+  }
+  .tour-nav-btn:hover { background: var(--tint-weak); }
+  .tour-nav-btn.t-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .tour-nav-btn.t-primary:hover { opacity: 0.84; background: var(--ink); }
+  #tour-skip { font: 400 11px/1 var(--mono); color: var(--ink-muted); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; opacity: 0.65; }
+  #tour-skip:hover { opacity: 1; }
+  #tour-dots { display: flex; gap: 5px; align-items: center; }
+  .tour-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tint-strong); transition: background 180ms; flex-shrink: 0; }
+  .tour-dot.t-active { background: var(--ink); }
+</style>
+
+<button id="tour-launch-btn" aria-label="Take a guided tour of this dashboard">
+  <svg width="11" height="11" viewBox="0 0 10 10" fill="currentColor"><polygon points="2,1 9,5 2,9"/></svg>
+  Tour
+</button>
+
+<div id="tour-hl" class="t-hidden"></div>
+<div id="tour-pop" class="t-hidden" role="dialog" aria-modal="true" aria-labelledby="tour-pop-title">
+  <div id="tour-pop-step"></div>
+  <div id="tour-pop-title"></div>
+  <div id="tour-pop-body"></div>
+  <div class="tour-nav">
+    <button id="tour-skip">skip</button>
+    <div id="tour-dots"></div>
+    <div class="tour-nav-btns">
+      <button class="tour-nav-btn" id="tour-prev" aria-label="Previous step">←</button>
+      <button class="tour-nav-btn t-primary" id="tour-next">Next →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Steps ──────────────────────────────────────────────────────────────
+  // target: CSS selector for the element to spotlight (null = centered modal)
+  // placement: where the popover appears relative to the spotlight
+  // pad: px of breathing room around the target rect
+  const STEPS = [
+    {
+      title: 'Interactive dashboard tour',
+      body:  'Eight stops covering the key features — filters, charts, toggles, and how they connect. Use <strong>← →</strong> keys or the buttons below. Press <strong>Esc</strong> to exit any time.',
+      target: null,
+    },
+    {
+      title: 'Pacing charts',
+      body:  'The green/red delta line is your actual spend vs. a <em>steady pace</em> to your limit. <strong>Above zero</strong> = burning ahead of pace. <strong>Below</strong> = under pace. The dashed gray tail shows idle time — cost paused, pace kept advancing.',
+      target: '.pacing-pair',
+      placement: 'right',
+      pad: 10,
+    },
+    {
+      title: 'KPI strip — click any tile',
+      body:  'Each tile compares a metric to the prior period. Tiles are <strong>sorted worst → best</strong> by % change so the biggest problems surface left. <strong>Click a tile</strong> to plot it in the historical chart below.',
+      target: '#metric-strip',
+      placement: 'bottom',
+      pad: 6,
+    },
+    {
+      title: '7d vs 24h comparison window',
+      body:  '<strong>7d vs prior 7d</strong> shows weekly trends. Switch to <strong>24h vs prior 7d</strong> to compare today\'s usage to your normal daily baseline — useful for catching a runaway session before it hits the weekly limit.',
+      target: '.strip-mode-toggle',
+      placement: 'bottom',
+      pad: 8,
+    },
+    {
+      title: 'Historical trends — zoom & granularity',
+      body:  'Drag the <strong>range slider</strong> below the chart to zoom in. Your zoom persists when you switch KPI tiles. Toggle <strong>Day / Week</strong> to change aggregation. Dashed markers show capability events — 1M context launch and Opus 4.7.',
+      target: '#trends',
+      placement: 'top',
+      pad: 10,
+    },
+    {
+      title: 'Token burn by context size',
+      body:  'Each column is one day. Height = tokens in "heavy" turns (>200K context). <strong>Color bands</strong> show Opus context tiers vs Sonnet. The mekko chart below shows <em>lift</em>: tokens consumed per unit of turn share — over 2× puts you in premium-cost territory.',
+      target: '#heavy-ribbon',
+      placement: 'top',
+      pad: 10,
+    },
+    {
+      title: 'Heaviest sessions',
+      body:  'Filtered to sessions with 500K+ context — the ones that move the cost needle. Each row shows the peak context window hit. Use this to spot sessions worth running <code>/compact</code> on, or splitting into sub-agents.',
+      target: '#session-table-host',
+      placement: 'top',
+      pad: 8,
+    },
+    {
+      title: 'Light / dark + that\'s the tour',
+      body:  'Toggles between themes. Preference is saved in <code>localStorage</code> so it persists across refreshes. The dashboard also works fully offline — nothing is fetched after load. Enjoy exploring your data.',
+      target: '#theme-toggle',
+      placement: 'bottom',
+      pad: 8,
+    },
+  ];
+
+  // ── DOM refs ───────────────────────────────────────────────────────────
+  const hl       = document.getElementById('tour-hl');
+  const pop      = document.getElementById('tour-pop');
+  const stepEl   = document.getElementById('tour-pop-step');
+  const titleEl  = document.getElementById('tour-pop-title');
+  const bodyEl   = document.getElementById('tour-pop-body');
+  const nextBtn  = document.getElementById('tour-next');
+  const prevBtn  = document.getElementById('tour-prev');
+  const skipBtn  = document.getElementById('tour-skip');
+  const dotsEl   = document.getElementById('tour-dots');
+  const launchBtn = document.getElementById('tour-launch-btn');
+
+  let cur = 0, active = false;
+
+  // ── Dots ───────────────────────────────────────────────────────────────
+  function buildDots() {
+    dotsEl.innerHTML = '';
+    STEPS.forEach((_, i) => {
+      const d = document.createElement('span');
+      d.className = 'tour-dot' + (i === cur ? ' t-active' : '');
+      dotsEl.appendChild(d);
+    });
+  }
+
+  // ── Popover positioning ────────────────────────────────────────────────
+  function placePop(hlRect, placement) {
+    const PAD = 14;
+    const pw = pop.offsetWidth  || 310;
+    const ph = pop.offsetHeight || 180;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let top, left;
+
+    if (!hlRect) {
+      top  = (vh - ph) / 2;
+      left = (vw - pw) / 2;
+    } else {
+      const mx = hlRect.left + hlRect.width  / 2;
+      const my = hlRect.top  + hlRect.height / 2;
+      const pl = placement || 'bottom';
+
+      if (pl === 'bottom') { top = hlRect.bottom + PAD; left = mx - pw / 2; }
+      else if (pl === 'top')   { top = hlRect.top - ph - PAD; left = mx - pw / 2; }
+      else if (pl === 'right') { top = my - ph / 2; left = hlRect.right + PAD; }
+      else                     { top = my - ph / 2; left = hlRect.left - pw - PAD; }
+
+      // flip if off-screen
+      if (pl === 'bottom' && top + ph > vh - PAD) top  = hlRect.top  - ph - PAD;
+      if (pl === 'top'    && top < PAD)            top  = hlRect.bottom + PAD;
+      if (pl === 'right'  && left + pw > vw - PAD) left = hlRect.left - pw - PAD;
+      if (pl === 'left'   && left < PAD)            left = hlRect.right + PAD;
+    }
+
+    // final clamp
+    top  = Math.max(PAD, Math.min(vh - ph - PAD, top));
+    left = Math.max(PAD, Math.min(vw - pw - PAD, left));
+    pop.style.top  = top  + 'px';
+    pop.style.left = left + 'px';
+  }
+
+  // ── Show step ──────────────────────────────────────────────────────────
+  function show(idx) {
+    cur = Math.max(0, Math.min(STEPS.length - 1, idx));
+    const s = STEPS[cur];
+
+    stepEl.textContent  = 'Step ' + (cur + 1) + ' of ' + STEPS.length;
+    titleEl.textContent = s.title;
+    bodyEl.innerHTML    = s.body;
+    nextBtn.textContent = cur === STEPS.length - 1 ? 'Done ✓' : 'Next →';
+    nextBtn.classList.toggle('t-primary', true);
+    prevBtn.style.visibility = cur === 0 ? 'hidden' : 'visible';
+    buildDots();
+
+    const el = s.target ? document.querySelector(s.target) : null;
+
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // wait for scroll to settle before reading rect
+      setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        const p = s.pad || 6;
+        const hlR = { top: r.top - p, left: r.left - p, bottom: r.bottom + p, right: r.right + p, width: r.width + p*2, height: r.height + p*2 };
+        hl.style.top    = hlR.top    + 'px';
+        hl.style.left   = hlR.left   + 'px';
+        hl.style.width  = hlR.width  + 'px';
+        hl.style.height = hlR.height + 'px';
+        hl.classList.remove('t-hidden');
+        pop.classList.remove('t-hidden');
+        requestAnimationFrame(() => placePop(hlR, s.placement));
+      }, 320);
+    } else {
+      hl.classList.add('t-hidden');
+      pop.classList.remove('t-hidden');
+      requestAnimationFrame(() => placePop(null));
+    }
+  }
+
+  function start() {
+    active = true;
+    launchBtn.classList.add('t-hidden');
+    show(0);
+  }
+
+  function end() {
+    active = false;
+    hl.classList.add('t-hidden');
+    pop.classList.add('t-hidden');
+    launchBtn.classList.remove('t-hidden');
+    // scroll back to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── Events ─────────────────────────────────────────────────────────────
+  launchBtn.addEventListener('click', start);
+  nextBtn.addEventListener('click', () => { if (cur >= STEPS.length - 1) end(); else show(cur + 1); });
+  prevBtn.addEventListener('click', () => show(cur - 1));
+  skipBtn.addEventListener('click', end);
+
+  document.addEventListener('keydown', e => {
+    if (!active) return;
+    if (e.key === 'Escape')     end();
+    if (e.key === 'ArrowRight') { if (cur < STEPS.length - 1) show(cur + 1); else end(); }
+    if (e.key === 'ArrowLeft'  && cur > 0) show(cur - 1);
+  });
+
+  // Auto-start on ?tour query param (shareable tour link)
+  if (new URLSearchParams(location.search).has('tour')) {
+    setTimeout(start, 900);
+  }
+})();
+</script>
+
 </body>
 </html>
