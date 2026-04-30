@@ -131,18 +131,19 @@
        drops the image via --body-texture: none. */
     background-image: var(--body-texture);
     background-repeat: repeat;
+    /* Outer gutter — leather texture shows as visible frame around the grid */
+    padding: 14px;
+    box-sizing: border-box;
   }
 
   /* ── Layout shell ──
-     Tight vertical padding + gap so pacing row, trends+heavy row, and
-     efficiency row fit inside a 15" MacBook viewport (~900px) without
-     scroll. Horizontal gap stays tight so cards feel paired within
-     a row. */
+     Tight gap so pacing row, trends+heavy row, and efficiency row fit
+     inside a 15" MacBook viewport (~900px). Shell has no padding —
+     the body's 14px padding provides the outer frame on all sides. */
   .shell {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
-    gap: 12px 14px;
-    padding: 8px 20px 20px;
+    gap: 14px;
     max-width: none;  /* full viewport width */
   }
   /* ── Desktop lock: canvas fits inside one MBP 15" window ─────────
@@ -153,10 +154,13 @@
      HTML (mobile still shows it via the media-query reset below).
      ────────────────────────────────────────────────────────────── */
   @media (min-width: 1201px) {
-    .shell {
+    body {
       height: 100vh;
-      padding: 8px 16px 12px;
-      gap: 10px 14px;
+      overflow: hidden;
+    }
+    .shell {
+      height: 100%;
+      gap: 12px;
       grid-template-rows: auto 300px 1fr;
       overflow: hidden;
     }
