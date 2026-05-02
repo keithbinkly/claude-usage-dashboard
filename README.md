@@ -131,6 +131,17 @@ The dashboard runs 100% locally. No data leaves your machine. The only network c
 
 ---
 
+## Feedback & contributing
+
+Bug reports, ideas, and PRs all welcome.
+
+- **Issues + PRs:** [github.com/keithbinkly/claude-usage-dashboard/issues](https://github.com/keithbinkly/claude-usage-dashboard/issues)
+- **LinkedIn:** [linkedin.com/in/keithbinkly](https://www.linkedin.com/in/keithbinkly)
+
+If you ship something cool on top of this — a different layout, a new metric, an export to your own warehouse — I'd love to see it.
+
+---
+
 ## License
 
 MIT
