@@ -39,6 +39,8 @@ Click `?` in the dashboard header to launch a 10-step interactive tour explainin
 
 ## Add your own data
 
+**Prefer a guided install?** See [`INSTALL.md`](INSTALL.md) for a prompt you can paste into a Claude Code session and have it walk through the whole setup for you.
+
 **Prerequisites:** macOS + Claude Code installed and logged in. The script reads `~/.claude/projects/*.jsonl` session logs — nothing else needed.
 
 ```bash
@@ -49,7 +51,7 @@ cd claude-usage-dashboard
 python3 claude_usage.py --layout wide --out my-dashboard.html
 open my-dashboard.html
 
-# Longer lookback (default is 21 days)
+# Shorter lookback (default is all-time)
 python3 claude_usage.py --layout wide --days 30 --out my-dashboard.html
 ```
 
@@ -114,7 +116,7 @@ The dashboard runs 100% locally. No data leaves your machine. The only network c
 
 ## Customizing
 
-- **Lookback:** `--days N` (default 21)
+- **Lookback:** `--days N` (default: all-time)
 - **Output file:** `--out filename.html`
 - **Sample data:** `--sample` generates synthetic data (used for the live preview above)
 - **Port conflict:** `python3 serve.py --port 9000`

@@ -8,7 +8,7 @@ open locally. Nothing leaves your machine.
 Usage:
     python3 claude_usage.py                   # dashboard.html in cwd
     python3 claude_usage.py --out ~/usage.html
-    python3 claude_usage.py --days 7          # lookback window (default 21)
+    python3 claude_usage.py --days 7          # lookback window (default: all-time)
     python3 claude_usage.py --open            # open the file when done
 
 The dashboard includes:
@@ -134,6 +134,7 @@ class Dataset:
     lookback_days: int = 21
     first_ms: int = 0
     last_ms: int = 0
+    is_sample: bool = False  # True when built from synthetic data — suppresses personal data in JSON output
 
 
 # ─── JSONL parsing ───────────────────────────────────────────────────────
@@ -1742,9 +1743,13 @@ def to_json(ds: Dataset) -> str:
         "first_1m_ms": getattr(ds, "first_1m_ms", None),
         "calibrations": calibrations_summary,
         # ── Ground-truth rate limits (live fetch at regen time) ──
-        "rate_limits_live": fetch_rate_limits_live(turns=ds.turns),
+        # rate_limits_live is skipped for sample builds — it would embed the
+        # generator's live token data into a public demo file.
+        "rate_limits_live": None if getattr(ds, "is_sample", False) else fetch_rate_limits_live(turns=ds.turns),
         # ── Secondary account (Max) — populated only when snapshot exists ──
-        "rate_limits_max":  fetch_rate_limits_for_max(turns=ds.turns),
+        # rate_limits_max is always skipped for sample builds: the snapshot
+        # contains real account email + UUID which must not ship publicly.
+        "rate_limits_max":  None if getattr(ds, "is_sample", False) else fetch_rate_limits_for_max(turns=ds.turns),
         # ── Preview payload (Phase 0 chart previews) ──
         "preview": {
             "active_sessions": aggregate_sessions(ds.turns, now_ms),
@@ -2074,6 +2079,7 @@ def generate_sample_dataset(days: int = 90) -> Dataset:
         lookback_days=days,
         first_ms=turns[0].ts_ms if turns else 0,
         last_ms=turns[-1].ts_ms if turns else 0,
+        is_sample=True,
     )
     ds.full_turns = full_turns                              # type: ignore[attr-defined]
     ds.daily_stats = _build_daily_stats_from_turns(turns)  # type: ignore[attr-defined]
