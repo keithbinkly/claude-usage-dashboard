@@ -1690,7 +1690,308 @@ def fetch_rate_limits_for_max(
 
 # ─── Dashboard emission ──────────────────────────────────────────────────
 
-def to_json(ds: Dataset) -> str:
+def _fmt_compact_num(n: float | int | None) -> str:
+    if n is None:
+        return "unknown"
+    try:
+        v = float(n)
+    except (TypeError, ValueError):
+        return "unknown"
+    if abs(v) >= 1_000_000:
+        return f"{v / 1_000_000:.1f}M"
+    if abs(v) >= 1_000:
+        return f"{v / 1_000:.0f}K"
+    return str(int(round(v)))
+
+
+def _fmt_pct_points(v: float | int | None) -> str:
+    if v is None:
+        return "unknown"
+    return f"{float(v):.0f}%"
+
+
+def _metric_delta(recent: list[dict], prior: list[dict], key: str, mode: str = "avg") -> float | None:
+    if not recent or not prior:
+        return None
+    if mode == "sum":
+        r = sum(d.get(key, 0) or 0 for d in recent)
+        p = sum(d.get(key, 0) or 0 for d in prior)
+    else:
+        r = sum(d.get(key, 0) or 0 for d in recent) / len(recent)
+        p = sum(d.get(key, 0) or 0 for d in prior) / len(prior)
+    if not p:
+        return None
+    return (r - p) / p
+
+
+def _build_usage_fact_packet(payload: dict) -> dict:
+    """Small, non-sensitive aggregate packet used for dashboard assertions.
+
+    This intentionally excludes raw turns, prompts, file paths, and session ids.
+    Claude-authored copy, when enabled, only sees these aggregate facts.
+    """
+    daily = payload.get("daily_stats") or []
+    recent = daily[-7:]
+    prior = daily[-14:-7] if len(daily) >= 14 else []
+
+    def _date_range(arr):
+        if not arr:
+            return None
+        first, last = arr[0].get("day", ""), arr[-1].get("day", "")
+        MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        try:
+            y0, m0, d0 = [int(x) for x in first.split("-")]
+            y1, m1, d1 = [int(x) for x in last.split("-")]
+            ms0, ms1 = MO[m0 - 1], MO[m1 - 1]
+            if ms0 == ms1 and y0 == y1:
+                return f"{ms0} {d0}–{d1}"
+            return f"{ms0} {d0}–{ms1} {d1}"
+        except Exception:
+            return None
+
+    recent_range = _date_range(recent)
+    prior_range = _date_range(prior)
+    rl = payload.get("rate_limits_live") or {}
+    preview = payload.get("preview") or {}
+    heavy = (preview.get("heavy_buckets") or {}).get("by_model") or {}
+    eff = preview.get("efficiency") or {}
+
+    window = None
+    if rl.get("seven_day"):
+        window = {"label": "weekly", "ms": SEVEN_DAYS_MS, **rl["seven_day"]}
+    elif rl.get("five_hour"):
+        window = {"label": "current session", "ms": FIVE_HRS_MS, **rl["five_hour"]}
+    elif rl.get("monthly"):
+        window = {"label": "monthly credits", "ms": 30 * 86400 * 1000, **rl["monthly"]}
+
+    pacing = {"status": "unknown", "label": "usage", "pct_used": None, "pct_elapsed": None}
+    now_ms = payload.get("now_ms") or int(datetime.now(timezone.utc).timestamp() * 1000)
+    if window:
+        pct_used = window.get("utilization")
+        reset_ms = window.get("resets_at_ms")
+        pct_elapsed = None
+        if reset_ms:
+            anchor = int(reset_ms) - int(window["ms"])
+            pct_elapsed = max(0, min(100, ((now_ms - anchor) / int(window["ms"])) * 100))
+        if pct_used is not None and pct_elapsed is not None:
+            delta = float(pct_used) - pct_elapsed
+            status = "over_pace" if delta >= 8 else "near_pace" if delta >= -8 else "under_pace"
+            if float(pct_used) >= 90:
+                status = "cap_risk"
+            pacing = {
+                "status": status,
+                "label": window["label"],
+                "pct_used": round(float(pct_used), 1),
+                "pct_elapsed": round(float(pct_elapsed), 1),
+                "pace_delta_points": round(delta, 1),
+                "reset_at_ms": reset_ms,
+                "freshness": "live" if rl.get("fetched_at_ms") else "snapshot",
+            }
+
+    metric_specs = [
+        ("avg_ctx", "average context", "avg"),
+        ("cost", "cost per day", "avg"),
+        ("cost_per_turn", "cost per turn", "avg"),
+        ("cache_hit_rate", "cache hit rate", "avg"),
+        ("tokens", "tokens per day", "avg"),
+        ("turns", "turns per day", "avg"),
+    ]
+    largest_change = None
+    for key, label, mode in metric_specs:
+        d = _metric_delta(recent, prior, key, mode)
+        if d is None:
+            continue
+        item = {"key": key, "label": label, "delta_pct": round(d * 100, 1)}
+        if largest_change is None or abs(item["delta_pct"]) > abs(largest_change["delta_pct"]):
+            largest_change = item
+
+    top_driver = None
+    labels = {
+        "opus_u200k": "<200K Opus",
+        "opus_200_500k": "200-500K Opus",
+        "opus_500_800k": "500-800K Opus",
+        "opus_o800k": ">=800K Opus",
+        "sonnet": "Sonnet",
+        "haiku": "Haiku",
+    }
+    for key, vals in heavy.items():
+        if key == "totals" or not isinstance(vals, dict):
+            continue
+        turn_share = vals.get("turn_share") or 0
+        token_share = vals.get("token_share") or 0
+        lift = (token_share / turn_share) if turn_share else 0
+        item = {
+            "key": key,
+            "label": labels.get(key, key),
+            "turn_share": round(turn_share * 100, 1),
+            "token_share": round(token_share * 100, 1),
+            "lift": round(lift, 2),
+        }
+        if top_driver is None or item["lift"] > top_driver["lift"]:
+            top_driver = item
+
+    best_lever = None
+    for key, label in [
+        ("route_heavy_to_sonnet", "Route heavy-context work to Sonnet subagents"),
+        ("compact_below_200k", "Compact before turns cross 200K context"),
+        ("both", "Route heavy work and compact earlier"),
+    ]:
+        cfo = (eff.get("counterfactuals") or {}).get(key) or {}
+        if cfo.get("pct_reduction") is None:
+            continue
+        item = {
+            "key": key,
+            "label": label,
+            "pct_reduction": cfo.get("pct_reduction"),
+            "usd_per_mtok": cfo.get("usd_per_mtok"),
+        }
+        if best_lever is None or item["pct_reduction"] > best_lever["pct_reduction"]:
+            best_lever = item
+
+    return {
+        "pacing": pacing,
+        "largest_change": largest_change,
+        "top_driver": top_driver,
+        "best_lever": best_lever,
+        "lookback_days": payload.get("lookback_days"),
+        "turn_count": payload.get("turn_count"),
+        "recent_range": recent_range,
+        "prior_range": prior_range,
+    }
+
+
+def _deterministic_insight_from_facts(facts: dict) -> dict:
+    pacing = facts.get("pacing") or {}
+    change = facts.get("largest_change") or {}
+    driver = facts.get("top_driver") or {}
+    lever = facts.get("best_lever") or {}
+
+    status = pacing.get("status", "unknown")
+    label = str(pacing.get("label") or "usage")
+    subject = label if "usage" in label.lower() else f"{label} usage"
+    if status == "cap_risk":
+        headline = f"{subject.title()} is close to the limit."
+        tone = "critical"
+    elif status == "over_pace":
+        headline = f"{subject.title()} is running ahead of pace."
+        tone = "warning"
+    elif status == "under_pace":
+        headline = f"{subject.title()} is comfortably under pace."
+        tone = "good"
+    elif status == "near_pace":
+        headline = f"{subject.title()} is roughly on pace."
+        tone = "neutral"
+    else:
+        # No rate-limit window — infer headline from change + driver facts
+        has_change = change and abs(change.get("delta_pct", 0)) >= 15
+        has_driver = driver and driver.get("lift", 0) > 1.5
+        if has_change and has_driver:
+            direction = "upswing" if change["delta_pct"] >= 0 else "drop"
+            headline = (
+                f"{driver['label']} is driving a {abs(change['delta_pct']):.0f}%"
+                f" {direction} in {change['label']}."
+            )
+            tone = "warning" if change["delta_pct"] >= 15 else ("good" if change["delta_pct"] <= -15 else "neutral")
+        elif has_change:
+            direction = "up" if change["delta_pct"] >= 0 else "down"
+            headline = (
+                f"{change['label'].title()} is {direction}"
+                f" {abs(change['delta_pct']):.0f}% vs the prior period."
+            )
+            tone = "warning" if change["delta_pct"] >= 30 else ("good" if change["delta_pct"] <= -20 else "neutral")
+        elif has_driver:
+            headline = f"{driver['label']} is taking an outsized share of tokens."
+            tone = "neutral"
+        else:
+            headline = "Usage patterns are ready to inspect."
+            tone = "neutral"
+
+    subparts = []
+    if pacing.get("pct_used") is not None and pacing.get("pct_elapsed") is not None:
+        subparts.append(
+            f"{_fmt_pct_points(pacing.get('pct_used'))} used with "
+            f"{_fmt_pct_points(pacing.get('pct_elapsed'))} of the window elapsed"
+        )
+    if change:
+        direction = "up" if change["delta_pct"] >= 0 else "down"
+        prior_range = facts.get("prior_range")
+        recent_range = facts.get("recent_range")
+        period_label = f"vs {prior_range}" if prior_range else "vs the prior period"
+        window_note = f" ({recent_range} vs {prior_range})" if (recent_range and prior_range) else ""
+        subparts.append(
+            f"{change['label']} is {direction} {abs(change['delta_pct']):.0f}%"
+            f" {period_label}{window_note}"
+        )
+    if driver and driver.get("lift", 0) > 1.15:
+        subparts.append(
+            f"{driver['label']} takes {driver['lift']:.1f}x its share of tokens "
+            f"({driver['token_share']:.0f}% tokens / {driver['turn_share']:.0f}% turns)"
+        )
+    subhead = ". ".join(subparts) + "." if subparts else "No strong usage driver stands out yet."
+
+    action = "Keep watching the trend chart for the next usage shift."
+    if lever and lever.get("pct_reduction", 0) >= 5:
+        action = f"{lever['label']} could cut the trailing token rate by about {lever['pct_reduction']:.0f}%."
+    elif status in {"over_pace", "cap_risk"}:
+        action = "Pause heavy Opus work, compact active sessions, or split the next task into a fresh session."
+
+    return {
+        "mode": "deterministic",
+        "tone": tone,
+        "headline": headline,
+        "subhead": subhead,
+        "action": action,
+        "facts": facts,
+    }
+
+
+def _claude_insight_from_facts(facts: dict) -> dict | None:
+    prompt = (
+        "You write concise, factual dashboard assertions for a local Claude Code usage dashboard.\n"
+        "Use ONLY the JSON facts provided. Do not infer beyond them. Return strict JSON with keys: "
+        "headline, subhead, action, tone. tone must be one of good, neutral, warning, critical.\n\n"
+        f"FACTS:\n{json.dumps(facts, separators=(',', ':'))}"
+    )
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["claude", "-p", prompt],
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        if result.returncode != 0:
+            return None
+        raw = result.stdout.strip()
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start == -1 or end == -1:
+            return None
+        parsed = json.loads(raw[start:end + 1])
+        if not isinstance(parsed, dict) or not parsed.get("headline"):
+            return None
+        parsed["mode"] = "claude"
+        parsed["facts"] = facts
+        return parsed
+    except Exception:
+        return None
+
+
+def build_usage_insights(payload: dict, mode: str = "deterministic") -> dict | None:
+    if mode == "off":
+        return None
+    facts = _build_usage_fact_packet(payload)
+    deterministic = _deterministic_insight_from_facts(facts)
+    if mode == "claude":
+        authored = _claude_insight_from_facts(facts)
+        if authored:
+            authored["fallback"] = deterministic
+            return authored
+        deterministic["mode"] = "deterministic_fallback"
+    return deterministic
+
+
+def to_json(ds: Dataset, insights_mode: str = "deterministic") -> str:
     full = getattr(ds, "full_turns", [])
     FIVE_HRS_MS = 5 * 3600 * 1000
     FIFTEEN_MIN_MS = 15 * 60 * 1000
@@ -1727,6 +2028,18 @@ def to_json(ds: Dataset) -> str:
 
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
     daily_stats = getattr(ds, "daily_stats", [])
+    rate_limits_live = getattr(ds, "sample_rate_limits", None) or fetch_rate_limits_live(turns=ds.turns)
+    preview = {
+        "active_sessions": aggregate_sessions(ds.turns, now_ms),
+        "ctx_histogram": compute_ctx_histogram(ds.turns, now_ms),
+        "heavy_buckets": compute_heavy_bucket_summary(daily_stats),
+        "efficiency": compute_efficiency_model(daily_stats, lookback_days=7),
+        "thresholds": list(HEAVY_BUCKET_THRESHOLDS),
+        "active_idle_ms": ACTIVE_IDLE_MS,
+        "sessions_lookback_ms": SESSIONS_LOOKBACK_MS,
+        "scatter_window_days": SCATTER_WINDOW_DAYS,
+    }
+
     payload = {
         "generated_at": ds.generated_at,
         "lookback_days": ds.lookback_days,
@@ -1742,20 +2055,11 @@ def to_json(ds: Dataset) -> str:
         "first_1m_ms": getattr(ds, "first_1m_ms", None),
         "calibrations": calibrations_summary,
         # ── Ground-truth rate limits (live fetch at regen time) ──
-        "rate_limits_live": fetch_rate_limits_live(turns=ds.turns),
+        "rate_limits_live": rate_limits_live,
         # ── Secondary account (Max) — populated only when snapshot exists ──
         "rate_limits_max":  fetch_rate_limits_for_max(turns=ds.turns),
         # ── Preview payload (Phase 0 chart previews) ──
-        "preview": {
-            "active_sessions": aggregate_sessions(ds.turns, now_ms),
-            "ctx_histogram": compute_ctx_histogram(ds.turns, now_ms),
-            "heavy_buckets": compute_heavy_bucket_summary(daily_stats),
-            "efficiency": compute_efficiency_model(daily_stats, lookback_days=7),
-            "thresholds": list(HEAVY_BUCKET_THRESHOLDS),
-            "active_idle_ms": ACTIVE_IDLE_MS,
-            "sessions_lookback_ms": SESSIONS_LOOKBACK_MS,
-            "scatter_window_days": SCATTER_WINDOW_DAYS,
-        },
+        "preview": preview,
         "turns": [
             {
                 "ts": t.ts_ms,
@@ -1773,6 +2077,9 @@ def to_json(ds: Dataset) -> str:
             for t in ds.turns
         ],
     }
+    insights = build_usage_insights(payload, insights_mode)
+    if insights:
+        payload["insights"] = insights
     return json.dumps(payload, separators=(",", ":"))
 
 
@@ -1812,9 +2119,9 @@ def load_template(layout: str = "editorial") -> str:
     )
 
 
-def render_html(ds: Dataset, layout: str = "editorial") -> str:
+def render_html(ds: Dataset, layout: str = "editorial", insights_mode: str = "deterministic") -> str:
     tpl = load_template(layout)
-    data_json = to_json(ds)
+    data_json = to_json(ds, insights_mode=insights_mode)
     # Substitute the __USAGE__ placeholder. The template uses
     # `window.__USAGE__ = {};` as a marker — replace the {} with our data.
     marker = "window.__USAGE__ = {};"
@@ -2078,6 +2385,21 @@ def generate_sample_dataset(days: int = 90) -> Dataset:
     ds.full_turns = full_turns                              # type: ignore[attr-defined]
     ds.daily_stats = _build_daily_stats_from_turns(turns)  # type: ignore[attr-defined]
     ds.first_1m_ms = None                                  # type: ignore[attr-defined]
+    # Synthetic rate limits so the sample pacing charts render yellow/red:
+    # 87% of weekly cap used but only ~65% of window elapsed → over-pace.
+    _now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    ds.sample_rate_limits = {                              # type: ignore[attr-defined]
+        "fetched_at_ms": _now_ms - 300_000,
+        "mode": "windows",
+        "five_hour": {
+            "utilization": 74,
+            "resets_at_ms": _now_ms + 45 * 60_000,
+        },
+        "seven_day": {
+            "utilization": 87,
+            "resets_at_ms": _now_ms + int(2.5 * 86_400_000),
+        },
+    }
     return ds
 
 
@@ -2096,6 +2418,15 @@ def main() -> None:
     ap.add_argument("--json-only", action="store_true", help="Write usage data as JSON instead of HTML")
     ap.add_argument("--sample", action="store_true",
                     help="Generate from synthetic demo data instead of ~/.claude/ (no personal data)")
+    ap.add_argument(
+        "--insights",
+        choices=["off", "deterministic", "claude"],
+        default="deterministic",
+        help=(
+            "Executive assertion mode: off, deterministic template copy, or "
+            "claude-authored copy from aggregate facts only (default: deterministic)"
+        ),
+    )
     args = ap.parse_args()
 
     if args.sample:
@@ -2114,7 +2445,7 @@ def main() -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
     if args.json_only:
-        args.out.write_text(to_json(ds), encoding="utf-8")
+        args.out.write_text(to_json(ds, insights_mode=args.insights), encoding="utf-8")
         size_kb = args.out.stat().st_size / 1024
         print(f"wrote {len(ds.turns):,} turns → {args.out} ({size_kb:.0f} KB)")
         return
@@ -2129,7 +2460,7 @@ def main() -> None:
 
     for out_path, layout in outputs:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(render_html(ds, layout), encoding="utf-8")
+        out_path.write_text(render_html(ds, layout, insights_mode=args.insights), encoding="utf-8")
         size_kb = out_path.stat().st_size / 1024
         print(f"wrote {len(ds.turns):,} turns → {out_path} ({size_kb:.0f} KB) [layout: {layout}]")
 
