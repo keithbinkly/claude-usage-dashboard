@@ -1571,33 +1571,33 @@
     width: 100%;
     margin: 14px 0 10px;
     background: linear-gradient(to right,
-      var(--calm) 0%,
+      var(--crit) 0%,
       var(--ink-dim) 50%,
-      var(--crit) 100%);
+      var(--calm) 100%);
     border-radius: 1px;
     opacity: 0.55;
   }
   .kpi-sort-bar::before,
   .kpi-sort-bar::after {
     position: absolute;
-    top: -13px;
+    top: -12px;
     font-family: var(--mono);
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     line-height: 1;
     pointer-events: none;
   }
   .kpi-sort-bar::before {
-    content: '+';
-    left: 25%;
-    transform: translateX(-50%);
-    color: var(--calm);
+    content: 'worse';
+    left: 0;
+    color: var(--crit);
   }
   .kpi-sort-bar::after {
-    content: '−';
-    left: 75%;
-    transform: translateX(-50%);
-    color: var(--crit);
+    content: 'better';
+    right: 0;
+    color: var(--calm);
   }
 
   .metric-tile {
@@ -3193,10 +3193,10 @@
           <button type="button" data-strip-mode="24v7" role="tab" aria-selected="false">24h vs prior 7d</button>
         </div>
       </div>
-      <p class="trends-kpi-note" id="trends-kpi-note">Tiles compare the most recent 7 days to the 7 days before that, sorted by % change descending (largest increase left). Tap a tile to plot that metric in the chart.</p>
+      <p class="trends-kpi-note" id="trends-kpi-note">Tiles compare the most recent 7 days to the 7 days before that, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart.</p>
       <div class="metric-strip-wrap" id="metric-strip-wrap">
         <div class="metric-strip" id="metric-strip" data-polish="metric-strip"><p class="session-empty">Loading…</p></div>
-        <div class="kpi-sort-bar" aria-label="KPIs ordered: greatest increase on the left, greatest decrease on the right"></div>
+        <div class="kpi-sort-bar" aria-label="Sort direction: metrics moved worse on the left, better on the right"></div>
       </div>
     </div>
     <div class="trends-head trends-head--chart">
@@ -4644,15 +4644,22 @@
     if (!host) return;
     host.innerHTML = '';
     const rows = buildMetricBanRows();
-    // Sort by raw % change descending: largest increase at left, largest drop at right.
-    // Null deltas sink to the right.
+    // Sort by SENTIMENT direction (not raw %): metrics that moved AGAINST you on
+    // the left, metrics that moved FOR you on the right. Each row carries
+    // a deltaDir flag — 'up' means "higher value is bad" (cost/day, turns/day,
+    // opus_share, cost/turn, avg_ctx); 'down' means "higher is good" (cache_hit_rate).
+    // Score = signed bad-motion magnitude. Sort descending so worst lands left.
+    // Matches the gradient bar (red left = worse, green right = better) AND
+    // the per-tile triangle colors. Null deltas sink to the right.
     rows.sort((a, b) => {
       const dA = delta(a.value, a.prior);
       const dB = delta(b.value, b.prior);
       if (dA == null && dB == null) return 0;
       if (dA == null) return 1;
       if (dB == null) return -1;
-      return dB - dA;
+      const scoreA = a.deltaDir === 'up' ? dA : -dA;
+      const scoreB = b.deltaDir === 'up' ? dB : -dB;
+      return scoreB - scoreA;
     });
     rows.forEach(b => {
       const d = delta(b.value, b.prior);
@@ -4741,8 +4748,8 @@
     const el = document.getElementById('trends-kpi-note');
     if (!el) return;
     el.textContent = stripCompareMode === '24v7'
-      ? 'Rolling last 24 hours vs the average daily level from the prior 7d, sorted by % change descending (largest increase left). Tap a tile to plot that metric in the chart below.'
-      : 'Tiles compare the most recent 7 days to the 7 days before that, sorted by % change descending (largest increase left). Tap a tile to plot that metric in the chart below.';
+      ? 'Rolling last 24 hours vs the average daily level from the prior 7d, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart below.'
+      : 'Tiles compare the most recent 7 days to the 7 days before that, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart below.';
   }
 
   // Render the metric strip BEFORE the trends chart so the chart's
@@ -7205,7 +7212,7 @@
     },
     {
       title: 'At a glance — KPI strip',
-      body:  'Each tile compares a metric to the prior period. Tiles auto-sort by <strong>% change descending</strong> — the <strong>largest percentage increase</strong> sits at the <em>left</em>, the <strong>largest percentage drop</strong> at the <em>right</em>. The gradient bar below the row mirrors the order. <strong>Click a tile</strong> to plot it in the historical chart below.',
+      body:  'Each tile compares a metric to the prior period. Tiles auto-sort by <strong>direction of change</strong> — metrics that moved <em>against you</em> on the <strong>left</strong> (red, "worse"), metrics that moved <em>for you</em> on the <strong>right</strong> (green, "better"). Each metric has its own sense: rising cost is bad, rising cache hit rate is good — the sort respects that. <strong>Click a tile</strong> to plot it in the historical chart below.',
       target: '#metric-strip-wrap',
       pad: 6,
       demo: 'cycleKpiTiles',
