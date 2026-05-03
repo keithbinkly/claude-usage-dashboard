@@ -15,7 +15,7 @@
      script in <head>; the rest of theme logic runs after body parses. */
   (function () {
     try {
-      if (localStorage.getItem('cum-theme') === 'light') {
+      if (localStorage.getItem('cum-theme') !== 'dark') {
         document.documentElement.setAttribute('data-theme', 'light');
       }
     } catch (e) { /* localStorage blocked — no-op, stay on dark default */ }
@@ -131,19 +131,25 @@
        drops the image via --body-texture: none. */
     background-image: var(--body-texture);
     background-repeat: repeat;
-    /* Outer gutter — leather texture shows as visible frame around the grid */
-    padding: 14px;
-    box-sizing: border-box;
+    /* Prevent absolute-positioned popovers from inflating the document
+       width and triggering horizontal scroll on narrow viewports. */
+    overflow-x: clip;
   }
 
   /* ── Layout shell ──
-     Tight gap so pacing row, trends+heavy row, and efficiency row fit
-     inside a 15" MacBook viewport (~900px). Shell has no padding —
-     the body's 14px padding provides the outer frame on all sides. */
+     Tight vertical padding + gap so pacing row, trends+heavy row, and
+     efficiency row fit inside a 15" MacBook viewport (~900px) without
+     scroll. Horizontal gap stays tight so cards feel paired within
+     a row. */
   .shell {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
-    gap: 14px;
+    gap: 12px 14px;
+    /* L/R/B gutter is intentionally larger than top — it's a "border space"
+       reserved for filter elements that sit just outside the cards
+       (pacing-toggles is the first inhabitant). Top stays tight so the
+       header row hugs the viewport edge. */
+    padding: 8px 50px 30px;
     max-width: none;  /* full viewport width */
   }
   /* ── Desktop lock: canvas fits inside one MBP 15" window ─────────
@@ -154,14 +160,14 @@
      HTML (mobile still shows it via the media-query reset below).
      ────────────────────────────────────────────────────────────── */
   @media (min-width: 1201px) {
-    body {
-      height: 100vh;
-      overflow: hidden;
-    }
     .shell {
-      height: 100%;
-      gap: 12px;
-      grid-template-rows: auto 300px 1fr;
+      height: 100vh;
+      /* Wider L/R gutter than the legacy 16px so out-of-card filter
+         elements (pacing-toggles, future per-chart filters) have room
+         to live just outside the cards without clipping the viewport. */
+      padding: 8px 50px 24px;
+      gap: 10px 14px;
+      grid-template-rows: auto 250px 1fr;
       overflow: hidden;
     }
     /* !important here because .lever-card / .footer / .header-meta
@@ -197,12 +203,13 @@
       align-self: stretch;
       width: 100%;
     }
-    /* Trends section: kill the caption on the locked view — the 1M
-       and Opus 4.7 markers on the chart itself already label them
-       inline. Also collapse chart-help to save a row of chrome. */
-    .trends-section > .trends-caption { display: none; }
+    /* Trends section: show the caption at desktop too. Switch chart
+       from flex:1 1 auto → flex:1 1 0 so it sizes from zero and
+       yields space to the caption sibling. Keep chart-help collapsed
+       (markers inline on the chart serve the same purpose). */
     .trends-section > .chart-help { display: none; }
-    .trends-chart { min-height: 0; }
+    .trends-section { overflow: visible; }
+    .trends-chart { min-height: 0 !important; flex: 1 1 0 !important; }
     /* Heavy-turn card: collapse the chart-help row (what-this-shows
        explainer); the composition bar + band labels inside the chart
        already teach the reader. */
@@ -210,7 +217,16 @@
     /* Sessions card: scrollable body so if there are more rows than
        fit in 260px, the user can scroll inside the card instead of
        the table bleeding past it. */
-    .sessions-card > #session-table-host { flex: 1 1 0; min-height: 0; overflow: auto; }
+    .sessions-card > #session-table-host {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow: auto;
+      /* Scroll still works; just hide the bright-white scrollbar strip
+         (was visible on the right edge in light mode, distracting). Same
+         pattern used by .session-scroll and .heavy-grid in this file. */
+      scrollbar-width: none;          /* Firefox */
+    }
+    .sessions-card > #session-table-host::-webkit-scrollbar { display: none; }  /* WebKit */
 
     /* Heavy-turn card internals: mekko + evolution chart both have
        a min-height floor (280 / 240) that prevents them from shrinking
@@ -224,7 +240,7 @@
     .heavy-ribbon, .heavy-trend { min-height: 0 !important; }
     .heavy-visual-split { flex: 1 1 0; }
   }
-  @media (max-width: 1100px) { .shell { padding: 16px 14px 28px; gap: 14px 12px; } }
+  @media (max-width: 1100px) { .shell { padding: 12px 36px 32px; gap: 14px 12px; } }
   @media (max-width: 720px)  {
     .shell { grid-template-columns: repeat(6, 1fr); gap: 14px; padding: 16px 12px 28px; }
     /* Force every shell child to full-row at mobile. Use !important
@@ -242,6 +258,7 @@
     .shell > *       { order: 10; }  /* default: anything not explicitly ordered goes to the middle */
     .header          { order: 0; }
     .pacing-pair     { order: 1; }
+    .pacing-scroll-dots { order: 1; }   /* tucks under .pacing-pair via DOM order */
     #manual-calibration { order: 2; }
     .sessions-card   { order: 3; }
     .trends-section  { order: 4; }
@@ -463,10 +480,34 @@
   .chart-help-body ul { margin: 6px 0; padding-left: 18px; }
   .chart-help-body li { margin-bottom: 4px; }
   /* Sessions-card "?" popover renders above neighboring cards via
-     absolute positioning + high z-index. Elsewhere on the page the
-     chart-help body flows in-document. */
+     absolute positioning + high z-index. Elevate the whole card when
+     the popover is open so neighboring cards' stacking contexts don't
+     clip the popup in the bottom-left corner. */
   .sessions-card .chart-help { position: relative; }
+  .sessions-card:has(.chart-help[open]) { z-index: 20; position: relative; }
   .sessions-card .chart-help-body {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(420px, calc(100vw - 40px));
+    z-index: 300;
+    background: var(--tooltip-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.15),
+      0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 14px 16px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  /* Inline chart-help in title rows (Info / Tips next to Day/Week
+     toggle on trends section). The body popovers anchor to the right
+     edge of their summary, expanding LEFT so they never run off the
+     viewport. Same visual treatment as sessions-card popover. */
+  .chart-help--inline { position: relative; margin: 0; }
+  .trends-section:has(.chart-help--inline[open]) { z-index: 20; position: relative; }
+  .chart-help--inline > .chart-help-body {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
@@ -503,7 +544,8 @@
      ("switch to dark"). Swap is a hard reload so all 7 ECharts instances
      re-init with fresh T palette — simpler than wiring re-render hooks
      into each IIFE, and the dashboard auto-refreshes every 5 min anyway. */
-  /* Header link (GitHub icon) — same chrome as theme/download buttons. */
+  /* Header link (GitHub icon) — same chrome as theme/download buttons so
+     all three sit on the right of the header as a coherent control row. */
   .header-link {
     appearance: none;
     background: transparent;
@@ -567,7 +609,11 @@
   .csv-preview-overlay.open::before { opacity: 1; pointer-events: auto; }
   .csv-preview-panel {
     position: relative; z-index: 1;
-    background: transparent;
+    background: var(--surface, #1a1c2a);
+    border: 1px solid var(--pane-border, rgba(255,255,255,0.1));
+    border-radius: 10px;
+    overflow: hidden;
+    pointer-events: auto;
     width: max-content;
     display: flex; flex-direction: column;
     transform: translateY(-6px); opacity: 0;
@@ -593,20 +639,20 @@
     white-space: nowrap;
   }
   .csv-preview-table th {
-    background: rgba(10,12,22,0.96);
+    background: var(--surface-2, rgba(10,12,22,0.96));
     color: var(--ink-dim); font-weight: 500; text-align: right; letter-spacing: 0.02em;
     padding: 5px 10px;
-    border: 1px solid rgba(255,255,255,0.09);
+    border: 1px solid var(--pane-border, rgba(255,255,255,0.09));
   }
   .csv-preview-table th:first-child { text-align: left; }
   .csv-preview-table td {
     color: var(--ink); text-align: right;
     padding: 4px 10px;
-    border: 1px solid rgba(255,255,255,0.07);
-    background: rgba(10,12,22,0.88);
+    border: 1px solid var(--divider, rgba(255,255,255,0.07));
+    background: var(--surface, rgba(10,12,22,0.88));
   }
   .csv-preview-table td:first-child { text-align: left; color: var(--ink-dim); }
-  .csv-preview-table tbody tr:hover td { background: rgba(255,255,255,0.05); }
+  .csv-preview-table tbody tr:hover td { background: var(--tint-mid); }
   .csv-preview-foot {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 12px 0;
@@ -615,11 +661,11 @@
   .csv-preview-cols { font-size: var(--fs-xs, 11px); color: var(--ink-dim); }
   .csv-download-btn {
     appearance: none; background: transparent; color: var(--ink-dim);
-    border: 1px solid rgba(255,255,255,0.15);
+    border: 1px solid var(--border, rgba(255,255,255,0.15));
     padding: 4px 10px; font-size: var(--fs-xs, 11px); cursor: pointer;
     transition: color 120ms, border-color 120ms;
   }
-  .csv-download-btn:hover { color: var(--ink); border-color: rgba(255,255,255,0.35); }
+  .csv-download-btn:hover { color: var(--ink); border-color: var(--border-accent, rgba(255,255,255,0.35)); }
   /* Glyph swap — the unicode moon/sun are stable across system fonts. */
   [data-theme="light"] .theme-toggle::before { content: '☾'; }
   :root:not([data-theme="light"]) .theme-toggle::before { content: '☀'; }
@@ -763,23 +809,110 @@
     align-items: stretch;
     gap: 8px;
     min-height: 0;
+    position: relative; /* anchor for absolutely-positioned .pacing-toggles */
   }
   @media (max-width: 1200px) { .pacing-pair { grid-column: span 12; } }
   @media (max-width: 900px)  {
     .pacing-pair { flex-direction: column; gap: 16px; }
   }
+  /* Phone: pacing cards stay in a horizontal row, swipeable.
+     Overrides the column stacking introduced at 900px. Each card fills
+     the full visible width — adjacent cards reached via swipe + dots. */
+  @media (max-width: 720px) {
+    .pacing-pair {
+      flex-direction: row !important;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 0;
+      padding-left: 0;
+      padding-right: 0;
+      position: relative;
+    }
+    .pacing-pair::-webkit-scrollbar { display: none; }
+    .pacing-pair .pacing-card {
+      flex: 0 0 100%;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+    }
+    /* Pacing-pair dots — pagination indicator below the scroll row.
+       Slightly more prominent than before (8px) so they read as a
+       visible swipe affordance on the very first card. */
+    .pacing-scroll-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .pacing-scroll-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--tint-strong);
+      transition: background 180ms, transform 180ms;
+      flex-shrink: 0;
+    }
+    .pacing-scroll-dot.active { background: var(--ink); transform: scale(1.15); }
+    /* Swipe hint — brief animated chevron on the right edge of the
+       pacing-pair, shown only when not yet scrolled. Disappears after
+       first interaction. Cue is subtle (3 fade-in/out beats), not
+       persistent UI noise. */
+    .pacing-pair[data-swiped="false"]::after {
+      content: '›';
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      font: 700 28px/1 var(--mono);
+      color: var(--ink-dim);
+      pointer-events: none;
+      animation: pacing-swipe-hint 1.6s ease-in-out 3;
+      animation-fill-mode: forwards;
+      opacity: 0;
+    }
+    @keyframes pacing-swipe-hint {
+      0%, 100% { opacity: 0; transform: translate(0, -50%); }
+      50%      { opacity: 0.7; transform: translate(-6px, -50%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pacing-pair[data-swiped="false"]::after { animation: none; opacity: 0.45; }
+    }
+    /* On mobile hide the absolute-positioned toggle pills — they'd overlap scroll row */
+    .pacing-toggles {
+      display: none !important;
+    }
+  }
+  /* Ensure dots container is hidden on desktop */
+  @media (min-width: 721px) {
+    .pacing-scroll-dots { display: none; }
+  }
 
-  /* Toggle pills — vertical sidebar on desktop, horizontal row on mobile. */
+  /* Toggle pills — pulled OUT of flex flow with position:absolute so the
+     cards' left edge stays aligned with the chart below. The pills hang
+     off the left of the .pacing-pair into the L/R gutter introduced on
+     .shell (padding-left ≥ 36px). On mobile the gutter shrinks and they
+     revert to a horizontal row above the cards (no x-offset to worry
+     about in single-column layout). The "border space" is the design
+     surface for any out-of-card filter that wants to live next to its
+     chart without consuming card x-space. */
   .pacing-toggles {
-    flex: 0 0 auto;
+    position: absolute;
+    left: -36px;          /* sits inside the .shell gutter (50px desktop, 36px mid) */
+    top: 0;
+    bottom: 0;
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding: 8px 0;
     align-items: center;
     justify-content: flex-start;
+    z-index: 2;
+    pointer-events: auto;
   }
   .pacing-toggles:empty { display: none; }
+  /* Mid-width: gutter shrinks from 50px → 36px, pull pills in proportionally. */
+  @media (max-width: 1100px) { .pacing-toggles { left: -28px; } }
   .pacing-toggle-pill {
     border-radius: 20px;
     padding: 5px 3px;
@@ -811,6 +944,8 @@
   }
   @media (max-width: 900px) {
     .pacing-toggles {
+      position: static;       /* reclaim flow on mobile so pills sit above cards */
+      left: auto; top: auto; bottom: auto;
       flex-direction: row;
       flex-wrap: wrap;
       padding: 0;
@@ -828,7 +963,7 @@
        + meta. Pane-of-glass treatment preserved; vertical padding and
        gap trimmed to help the pacing row fit inside one MBP 15" viewport
        alongside the trends + heavy row below. */
-    padding: 14px 18px;
+    padding: 12px 14px;
     background: linear-gradient(
       180deg,
       var(--pane-top) 0%,
@@ -882,41 +1017,44 @@
     flex-wrap: wrap;
   }
   .pacing-label {
-    font: 700 15px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 700 13px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
     letter-spacing: -0.005em;
     color: var(--ink);
     text-transform: none;
   }
-  .chart-unit-toggle {
-    display: inline-flex;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 6px;
-    padding: 2px;
+  /* Single-button "coin" toggle — replaces the old segmented two-button
+     control. Same idiom as a light/dark theme toggle: one button flips
+     state on click, the visible glyph reflects the CURRENT unit. Sized
+     to match the label cap-height so the .pacing-pct row sits flush
+     under the title (matches the Monthly card's compact head). */
+  .chart-unit-coin {
     flex-shrink: 0;
-  }
-  [data-theme="light"] .chart-unit-toggle {
-    background: rgba(0, 0, 0, 0.05);
-  }
-  .chart-unit-toggle button {
-    font-family: var(--mono);
-    font-size: var(--fs-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 3px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 50%;
     background: transparent;
     color: var(--ink-dim);
-    border: none;
-    border-radius: 4px;
+    border: 1px solid var(--ink-dim);
     cursor: pointer;
-    min-height: 22px;
-    min-width: 26px;
-    transition: all 120ms ease;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    transition: color 120ms ease, border-color 120ms ease,
+                background 120ms ease, transform 200ms cubic-bezier(0.34,1.56,0.64,1);
   }
-  .chart-unit-toggle button:hover { color: var(--ink-muted); }
-  .chart-unit-toggle button.active {
+  .chart-unit-coin:hover {
     color: var(--ink);
-    background: var(--surface);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    border-color: var(--ink);
+    transform: rotate(180deg);
+  }
+  .chart-unit-coin:focus-visible {
+    outline: 2px solid var(--accent, #4a8a7e);
+    outline-offset: 2px;
   }
 
   /* Session range toggle — same visual idiom as the $/tok toggle so
@@ -966,6 +1104,16 @@
     border-bottom: 1px solid var(--pane-divider);
     flex-wrap: wrap;
   }
+  .sessions-head-right {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-left: auto;
+  }
+  /* On mobile keep the toggle + Info button on one row, right-aligned. */
+  @media (max-width: 720px) {
+    .sessions-head-right { gap: 6px; }
+  }
   .sessions-head-main {
     display: flex;
     align-items: baseline;
@@ -1012,30 +1160,55 @@
   .pacing-pct {
     display: flex;
     align-items: baseline;
-    gap: 10px;
+    gap: 6px;
     font-family: var(--mono);
     font-variant-numeric: tabular-nums;
     line-height: 1;
     flex-wrap: wrap;
   }
   .pacing-pct-used {
-    font-size: var(--fs-hero);
+    font-size: 26px;
     font-weight: 700;
     color: var(--ink);
     letter-spacing: -0.02em;
+    white-space: nowrap;
   }
   .pacing-pct-sep {
-    font-size: var(--fs-xl);
-    font-weight: 400;
-    color: var(--ink-dim);
+    /* Was a static "·" dot. Now a dynamic comparison glyph: "<" when
+       used % is BELOW elapsed % (under pace, green), ">" when used >
+       elapsed (over pace, yellow→red gradient by magnitude). The glyph
+       and color are written by renderPacing() based on (pctUsed - pctTime). */
+    font-size: 20px;
+    font-weight: 700;            /* bolder so the directional symbol reads strong */
+    color: var(--ink-dim);       /* default; renderPacing overrides */
     line-height: 1;
-    padding: 0 2px;
+    padding: 0 1px;
+    font-family: var(--mono);    /* monospace for symmetric < / > rendering */
   }
   .pacing-pct-time {
-    font-size: var(--fs-xl);
+    font-size: 20px;
     font-weight: 600;
     color: var(--ink-muted);
     letter-spacing: -0.015em;
+    white-space: nowrap;
+  }
+  /* Column wrapper: number on top, "used"/"elapsed" label directly below.
+     The row flex only measures the narrow percentage widths so three cards
+     never wrap, while the label remains visible for context. */
+  .pacing-pct-col {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+  .pacing-pct-sublabel {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--ink-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
   }
   @media (max-width: 720px) {
     .pacing-pct-used { font-size: var(--fs-xl); }
@@ -1263,10 +1436,10 @@
     .calibrate-group button {
       min-height: 44px;
     }
-    .chart-unit-toggle button {
-      min-height: 36px;
-      min-width: 36px;
-      padding: 6px 10px;
+    .chart-unit-coin {
+      width: 28px;
+      height: 28px;
+      font-size: 12px;
     }
     .trend-btn {
       min-height: 40px;
@@ -1442,7 +1615,7 @@
   }
   .trends-kpi-block {
     margin-bottom: 8px;
-    padding-bottom: 6px;
+    padding: 0 12px 6px;
     border-bottom: 1px solid var(--pane-divider);
   }
   .trends-kpi-head {
@@ -1631,6 +1804,10 @@
   @media (max-width: 720px) {
     .metric-tile:nth-child(3n) { border-right: none; }
     .metric-tile:last-child { border-right: none; }
+    /* Tighten horizontal padding so cost BANs ($X.XX) don't truncate
+       inside narrow 33%-width tiles on phones. */
+    .metric-tile { padding: 8px 6px 10px; }
+    .metric-tile-mid { gap: 3px; }
   }
   .metric-tile:hover {
     color: var(--ink);
@@ -1726,6 +1903,12 @@
     display: inline-flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  @media (max-width: 720px) {
+    .trends-head-right { gap: 6px; }
+    .trends-head-right .note { display: none; }
   }
   .granularity-toggle {
     display: inline-flex;
@@ -1769,33 +1952,6 @@
   }
   @media (max-width: 720px) { .trends-chart { min-height: 240px; flex: 0 0 auto; height: 240px; } }
 
-  .trends-caption {
-    font-family: var(--body, 'Satoshi', system-ui, sans-serif);
-    font-size: var(--fs-base);
-    line-height: 1.6;
-    color: var(--ink-muted);
-    margin: 10px 0 0 0;
-    max-width: 72ch;
-  }
-  .trends-caption-intro { margin: 0 0 6px 0; }
-  .trends-caption-row {
-    margin: 0 0 3px 0;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .trends-caption-row:last-child { margin-bottom: 0; }
-  .trends-caption strong { color: var(--ink); font-weight: 600; }
-  .trends-caption-swatch {
-    display: inline-block;
-    width: 18px;
-    height: 0;
-    border-top: 1.5px dashed var(--ink-dim);
-    margin: 0 6px 3px 4px;
-    vertical-align: middle;
-  }
-  .trends-caption-swatch--amber { border-top-color: var(--warn, #d4a34d); }
-  .trends-caption-swatch--sonnet { border-top-color: var(--model-sonnet, #82ad95); }
 
   /* ── Row 3 (primary narrative pair) ──
      Historical trends on the left (span 7) + heavy-turn card on
@@ -2335,8 +2491,13 @@
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    /* Separator was border-bottom (under the toggles) when this header
+       carried a title. Title was dropped → header now contains only the
+       toggle row, and the separator visually orphaned beneath it. Flipped
+       to border-top so the line sits ABOVE the toggles, marking the
+       boundary with the chart above instead of the chart below. */
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
     font-family: var(--mono);
     font-size: var(--fs-sm);
     color: var(--ink-dim);
@@ -2359,7 +2520,25 @@
     row-gap: 8px;
   }
   @media (max-width: 720px) {
-    .trend-toggle button { padding: 6px 9px; }
+    /* Single-row layout on phones: hide group labels (Metric / Scale /
+       Range), tighten button padding, drop letter-spacing. The active
+       button colors still encode which option is selected. */
+    .heavy-trend-toggles {
+      gap: 4px;
+      flex-wrap: nowrap;
+      row-gap: 0;
+      width: 100%;
+      justify-content: space-between;
+    }
+    .heavy-trend-toggles .trend-toggle-group-label { display: none; }
+    .heavy-trend-toggles .trend-toggle-group { gap: 0; min-width: 0; }
+    .trend-toggle { padding: 1px; }
+    .trend-toggle button {
+      padding: 4px 5px;
+      letter-spacing: 0;
+      font-size: 9.5px;
+      text-transform: none;
+    }
   }
   .trend-toggle {
     display: inline-flex;
@@ -2673,15 +2852,20 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     position: relative;
+    scrollbar-width: none;
   }
+  .session-scroll::-webkit-scrollbar { display: none; }
   /* Sticky table header so column labels stay visible when scrolling.
-     Subtle background band makes the header row read as a visible
-     section, not another data row. */
+     Scope to #session-table-host so the rule wins specificity over any
+     bare .session-table thead th rules below. z-index bumped to 5 so
+     the header sits above sorted-row hover/selection backgrounds. */
+  #session-table-host .session-table thead th,
   .session-table thead th {
+    position: -webkit-sticky;        /* Safari 12 fallback */
     position: sticky;
     top: 0;
-    background: var(--tint-header);
-    z-index: 1;
+    background: var(--surface);      /* opaque — must cover scrolled rows beneath */
+    z-index: 5;
     box-shadow: 0 1px 0 var(--tint-strong-2);
   }
   @media (max-width: 720px) {
@@ -2725,7 +2909,11 @@
   .session-table td.model.sonnet { color: var(--model-sonnet); }
   .session-table td.model.haiku  { color: var(--model-haiku); }
   .session-table td.ago { color: var(--ink-dim); font-size: var(--fs-sm); }
-  .session-table td.rec { text-align: right; }
+  .session-table td.rec { text-align: left; }
+  .session-table th.sortable { cursor: pointer; user-select: none; }
+  .session-table th.sortable:hover { color: var(--ink); }
+  .session-table th.sort-asc::after  { content: ' ▲'; font-size: 0.7em; opacity: 0.7; }
+  .session-table th.sort-desc::after { content: ' ▼'; font-size: 0.7em; opacity: 0.7; }
   .session-table .badge {
     display: inline-block;
     font-family: var(--mono);
@@ -2764,125 +2952,6 @@
     font-style: italic;
   }
 
-  /* ── Resume button + account picker modal ── */
-  .session-table td.resume-col { text-align: right; padding-right: 2px; }
-  .resume-btn {
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    padding: 2px 7px;
-    border-radius: 4px;
-    border: 1px solid rgba(255,255,255,0.10);
-    background: transparent;
-    color: var(--ink-dim);
-    cursor: pointer;
-    letter-spacing: 0.04em;
-    transition: color 0.12s, border-color 0.12s;
-  }
-  .resume-btn:hover { color: var(--model-sonnet); border-color: var(--model-sonnet); }
-  [data-theme="light"] .resume-btn { border-color: rgba(0,0,0,0.12); }
-  [data-theme="light"] .resume-btn:hover { color: var(--model-sonnet); border-color: var(--model-sonnet); }
-
-  .acct-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.55);
-    z-index: 9000;
-    align-items: center;
-    justify-content: center;
-  }
-  .acct-overlay.open { display: flex; }
-  .acct-modal {
-    background: var(--surface-2);
-    border: 1px solid rgba(255,255,255,0.09);
-    border-radius: 10px;
-    padding: 20px 22px 16px;
-    min-width: 290px;
-    max-width: 420px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  }
-  [data-theme="light"] .acct-modal { border-color: rgba(0,0,0,0.10); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
-  .acct-modal-label {
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    color: var(--ink-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 3px;
-  }
-  .acct-modal-sid {
-    font-family: var(--mono);
-    font-size: var(--fs-sm);
-    color: var(--ink);
-    margin-bottom: 16px;
-  }
-  .acct-btns {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  .acct-btn {
-    flex: 1;
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.11);
-    background: var(--surface);
-    color: var(--ink-muted);
-    font-family: var(--mono);
-    font-size: var(--fs-sm);
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-  }
-  .acct-btn:hover { background: rgba(255,255,255,0.06); }
-  .acct-btn.acct-a { border-color: var(--model-sonnet); color: var(--model-sonnet); }
-  .acct-btn.acct-a:hover { background: rgba(130,173,149,0.10); }
-  .acct-btn.acct-b { border-color: var(--model-opus); color: var(--model-opus); }
-  .acct-btn.acct-b:hover { background: rgba(226,106,63,0.10); }
-  .acct-cmd-wrap { display: none; }
-  .acct-cmd-wrap.show { display: block; }
-  .acct-cmd-hint {
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    color: var(--ink-dim);
-    margin-bottom: 4px;
-  }
-  .acct-cmd-text {
-    background: var(--surface);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 4px;
-    padding: 7px 9px;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--ink-muted);
-    word-break: break-all;
-    cursor: pointer;
-    user-select: all;
-    line-height: 1.5;
-    transition: border-color 0.12s, color 0.12s;
-  }
-  .acct-cmd-text:hover { border-color: rgba(255,255,255,0.18); color: var(--ink); }
-  .acct-copy-feedback {
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    color: var(--model-sonnet);
-    text-align: right;
-    margin-top: 3px;
-    min-height: 14px;
-  }
-  .acct-cancel {
-    display: block;
-    width: 100%;
-    margin-top: 10px;
-    padding: 5px;
-    background: transparent;
-    border: none;
-    color: var(--ink-dim);
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    cursor: pointer;
-    text-align: center;
-  }
-  .acct-cancel:hover { color: var(--ink-muted); }
 
   /* ── Footer ── */
   .footer {
@@ -2954,7 +3023,7 @@
               title="Toggle light/dark theme"></button>
     </div>
     <details class="method-note">
-      <summary>how the pace line works</summary>
+      <summary aria-label="How the pace line works">Info</summary>
       <div class="method-body">
         <p>The pace line shows how far above or below a steady burn you are — not total spend. A steady pace that would land you exactly at the limit when the window resets plots as a flat line at zero. Under-pace dips down (green); over-pace climbs up (yellow → red).</p>
         <p><strong>Spending limit:</strong> Anthropic doesn't publish a hard dollar number for Max tiers, so we work it out from <code>/api/oauth/usage</code> — the same feed Claude Code's <code>/usage</code> command reads. If that endpoint is unreachable, we fall back to the observed ceiling (~$5,900/week).</p>
@@ -2977,19 +3046,23 @@
       <div class="pacing-head">
         <span class="pacing-label">Current session</span>
         <span class="pacing-live-badge" id="p5h-live-badge" hidden></span>
-        <div class="chart-unit-toggle" data-prefix="p5h" role="tablist" aria-label="Chart unit">
-          <button data-unit="usd" class="active" role="tab" aria-selected="true">$</button>
-          <button data-unit="tokens" role="tab" aria-selected="false">tok</button>
-        </div>
+        <button class="chart-unit-coin" data-prefix="p5h" data-unit="usd"
+                aria-label="Toggle dollars or tokens" title="Toggle dollars or tokens">$</button>
       </div>
       <!-- Headline row: paired % used · % elapsed at equal weight so
            the key comparison (are you burning faster than the clock?)
            is visible at a glance. End-label (reset time + remaining)
            floats right in the same row. Spent/limit subtitle below. -->
       <div class="pacing-pct">
-        <span class="pacing-pct-used" id="p5h-pct-used">—</span>
-        <span class="pacing-pct-sep">·</span>
-        <span class="pacing-pct-time" id="p5h-pct-time">—</span>
+        <span class="pacing-pct-col">
+          <span class="pacing-pct-used" id="p5h-pct-used">—</span>
+          <span class="pacing-pct-sublabel">used</span>
+        </span>
+        <span class="pacing-pct-sep" id="p5h-pct-sep">·</span>
+        <span class="pacing-pct-col">
+          <span class="pacing-pct-time" id="p5h-pct-time">—</span>
+          <span class="pacing-pct-sublabel">elapsed</span>
+        </span>
         <span class="chart-end-label" id="p5h-end-label"></span>
       </div>
       <div class="pacing-spent">
@@ -3005,15 +3078,19 @@
       <div class="pacing-head">
         <span class="pacing-label">Weekly limit</span>
         <span class="pacing-live-badge" id="pw-live-badge" hidden></span>
-        <div class="chart-unit-toggle" data-prefix="pw" role="tablist" aria-label="Chart unit">
-          <button data-unit="usd" class="active" role="tab" aria-selected="true">$</button>
-          <button data-unit="tokens" role="tab" aria-selected="false">tok</button>
-        </div>
+        <button class="chart-unit-coin" data-prefix="pw" data-unit="usd"
+                aria-label="Toggle dollars or tokens" title="Toggle dollars or tokens">$</button>
       </div>
       <div class="pacing-pct">
-        <span class="pacing-pct-used" id="pw-pct-used">—</span>
-        <span class="pacing-pct-sep">·</span>
-        <span class="pacing-pct-time" id="pw-pct-time">—</span>
+        <span class="pacing-pct-col">
+          <span class="pacing-pct-used" id="pw-pct-used">—</span>
+          <span class="pacing-pct-sublabel">used</span>
+        </span>
+        <span class="pacing-pct-sep" id="pw-pct-sep">·</span>
+        <span class="pacing-pct-col">
+          <span class="pacing-pct-time" id="pw-pct-time">—</span>
+          <span class="pacing-pct-sublabel">elapsed</span>
+        </span>
         <span class="chart-end-label" id="pw-end-label"></span>
       </div>
       <div class="pacing-spent">
@@ -3035,9 +3112,15 @@
         <span class="pacing-live-badge" id="pm-live-badge" hidden></span>
       </div>
       <div class="pacing-pct">
-        <span class="pacing-pct-used" id="pm-pct-used">—</span>
-        <span class="pacing-pct-sep">·</span>
-        <span class="pacing-pct-time" id="pm-pct-time">—</span>
+        <span class="pacing-pct-col">
+          <span class="pacing-pct-used" id="pm-pct-used">—</span>
+          <span class="pacing-pct-sublabel">used</span>
+        </span>
+        <span class="pacing-pct-sep" id="pm-pct-sep">·</span>
+        <span class="pacing-pct-col">
+          <span class="pacing-pct-time" id="pm-pct-time">—</span>
+          <span class="pacing-pct-sublabel">elapsed</span>
+        </span>
         <span class="chart-end-label" id="pm-end-label"></span>
       </div>
       <div class="pacing-spent">
@@ -3050,6 +3133,8 @@
       </div>
     </div>
   </div>
+  <!-- Pagination dots for mobile pacing scroll — hidden on desktop via CSS -->
+  <div class="pacing-scroll-dots" id="pacing-scroll-dots" aria-hidden="true"></div>
 
   <!-- ── Row 3 RIGHT: heavy-turn card — sits alongside historical trends
        (span 5, row 3 on wide desktop). Efficiency levers were hoisted
@@ -3057,8 +3142,7 @@
        so the row-3 right column doesn't double-stack. ── -->
       <section class="lever-card heavy-turn-card" data-polish="heavy-turn-card">
       <div class="lever-card-label" data-polish="heavy-turn-label">
-        <span>How tokens get burned</span>
-        <span class="lever-card-hint">Token vs turn imbalance · last 7 days</span>
+        <span>Context depth makes turns expensive</span>
       </div>
       <!-- Guidance `<details>` removed — the data-driven headline, pane
            legend, and per-segment tooltips already explain the story. On
@@ -3081,7 +3165,7 @@
         <div class="heavy-panel heavy-panel--trend">
           <div class="heavy-trend-wrap heavy-trend-wrap--full">
             <div class="heavy-trend-header">
-              <span id="heavy-trend-title">Daily token mix by context band</span>
+              <span id="heavy-trend-title"></span>
               <div class="heavy-trend-toggles">
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Metric</span>
@@ -3121,8 +3205,15 @@
     <div class="sessions-head">
       <div class="sessions-head-main">
         <span class="pacing-label">Heaviest sessions<span id="sessions-range-label" hidden></span></span>
+      </div>
+      <div class="sessions-head-right">
+        <div class="sessions-range-toggle" role="tablist" aria-label="Time range">
+          <button type="button" data-range="1h"  role="tab" aria-selected="false">1h</button>
+          <button type="button" data-range="1d"  role="tab" aria-selected="false">1d</button>
+          <button type="button" data-range="7d"  role="tab" aria-selected="true" class="active">7d</button>
+        </div>
         <details class="chart-help">
-          <summary aria-label="What this shows">What this shows</summary>
+          <summary aria-label="What this shows">Info</summary>
           <div class="chart-help-body">
           <p><strong>What it shows:</strong> the sessions you ran in the chosen window whose peak context hit at least 500K, ranked by how heavy they got. Anything lighter than 500K is filtered out so the list stays focused on the ones where doing something would actually matter. The <strong>action</strong> column suggests what to do based on peak context:</p>
           <ul>
@@ -3137,11 +3228,6 @@
           <p>Session IDs here are the first 8 characters of the Claude Code session filenames under <code>~/.claude/projects/</code>.</p>
           </div>
         </details>
-      </div>
-      <div class="sessions-range-toggle" role="tablist" aria-label="Time range">
-        <button type="button" data-range="1h"  role="tab" aria-selected="false">1h</button>
-        <button type="button" data-range="1d"  role="tab" aria-selected="false">1d</button>
-        <button type="button" data-range="7d"  role="tab" aria-selected="true" class="active">7d</button>
       </div>
     </div>
     <div id="session-table-host"><p class="session-empty">Loading…</p></div>
@@ -3207,35 +3293,29 @@
           <button type="button" data-granularity="day" class="active">Day</button>
           <button type="button" data-granularity="week">Week</button>
         </div>
+        <details class="chart-help chart-help--inline">
+          <summary aria-label="What this shows">Info</summary>
+          <div class="chart-help-body">
+            <p><strong>What it shows:</strong> the chart is daily or weekly aggregates over your lookback. The strip above is a quick read on current pace: either 7-day averages vs the week before, or a rolling 24-hour snapshot vs the same prior-week daily baseline.</p>
+            <p><strong>Reading the trend:</strong> bars show individual days (or weeks, if you toggle Week); the line is a smoothed running average. The two dashed markers point to capability events (1M context turning on, Opus 4.7 launching) — useful anchors for where habits often shift.</p>
+          </div>
+        </details>
+        <details class="chart-help chart-help--inline">
+          <summary aria-label="Tips for spending less">Tips</summary>
+          <div class="chart-help-body">
+            <p><strong>How to spend less:</strong></p>
+            <ul>
+              <li><strong>avg ctx, cost/turn</strong> — <code>/compact</code> more often, <code>Grep</code> before <code>Read</code>, hand research to sub-agents so their context doesn't pile onto yours.</li>
+              <li><strong>cost/day, turns/day</strong> — batch related questions into one prompt; move mechanical work from Opus to Sonnet.</li>
+              <li><strong>cache hit %</strong> — above 85% is healthy; below 70% means the session keeps reshaping context each turn.</li>
+              <li><strong>opus share</strong> — over 70% is expensive. Sonnet is about 5× cheaper per token for mechanical work at similar quality.</li>
+            </ul>
+          </div>
+        </details>
       </div>
     </div>
-    <details class="chart-help">
-      <summary>what this shows · how to spend less</summary>
-      <div class="chart-help-body">
-        <p><strong>What it shows:</strong> the chart is daily or weekly aggregates over your lookback. The strip above is a quick read on current pace: either 7-day averages vs the week before, or a rolling 24-hour snapshot vs the same prior-week daily baseline.</p>
-        <p><strong>Reading the trend:</strong> bars show individual days (or weeks, if you toggle Week); the line is a smoothed running average. The two dashed markers point to capability events (1M context turning on, Opus 4.7 launching) — useful anchors for where habits often shift.</p>
-        <p><strong>How to spend less:</strong></p>
-        <ul>
-          <li><strong>tokens/turn, cost/turn, avg ctx</strong> — <code>/compact</code> more often, <code>Grep</code> before <code>Read</code>, hand research to sub-agents so their context doesn't pile onto yours.</li>
-          <li><strong>cost/day, turns/day</strong> — batch related questions into one prompt; move mechanical work from Opus to Sonnet.</li>
-          <li><strong>cache hit %</strong> — above 85% is healthy; below 70% means the session keeps reshaping context each turn.</li>
-          <li><strong>opus share</strong> — over 70% is expensive. Sonnet is about 5× cheaper per token for mechanical work at similar quality.</li>
-        </ul>
-      </div>
-    </details>
     <div class="trends-chart" id="trends" data-polish="trends-chart" role="img" aria-label="Historical daily token usage trends"></div>
     <p class="trends-slider-hint">Tip: drag the range bar under the chart to zoom the x-axis, or hold <kbd>Ctrl</kbd> / <kbd>⌘</kbd> and scroll inside the chart.</p>
-    <div class="trends-caption">
-      <p class="trends-caption-intro">Capability events — where habits often shifted:</p>
-      <p class="trends-caption-row">
-        <span class="trends-caption-swatch trends-caption-swatch--amber"></span>
-        <strong>1M context turned on</strong> — the first day you used more than 200K tokens in one turn, after Anthropic opened up the 1M context window (March 2026).
-      </p>
-      <p class="trends-caption-row">
-        <span class="trends-caption-swatch trends-caption-swatch--sonnet"></span>
-        <strong>Opus 4.7 released</strong> — April 16, 2026, when Opus 4.7 became the default model.
-      </p>
-    </div>
   </div>
 
   <div class="footer">
@@ -3509,7 +3589,7 @@
       cap5hTok = h5.capTok || cap5hTokObserved;
       cap5hSource = 'manual';
     }
-    const h5LiveUtil = RL_LIVE && RL_LIVE.five_hour && RL_LIVE.five_hour.utilization;
+    const h5LiveUtil = rlFiveHour() && rlFiveHour().utilization;
     const h5CurWin = (effective5hWindows() || []).slice(-1)[0];
     const h5Inferred = inferCapFromLive(h5CurWin, h5LiveUtil);
     if (h5Inferred) {
@@ -3527,7 +3607,7 @@
       capWkTok = wk.capTok || capWkTokObserved;
       capWkSource = 'manual';
     }
-    const wkLiveUtil = RL_LIVE && RL_LIVE.seven_day && RL_LIVE.seven_day.utilization;
+    const wkLiveUtil = rlSevenDay() && rlSevenDay().utilization;
     const wkCurWin = (effectiveWkWindows() || []).slice(-1)[0];
     const wkInferred = inferCapFromLive(wkCurWin, wkLiveUtil);
     if (wkInferred) {
@@ -3600,6 +3680,11 @@
   //   2. DATA.rate_limits_live baked in at regen time — stale fallback.
   // Both hit the same Anthropic OAuth usage endpoint; (1) is just fresher.
   let RL_LIVE = DATA.rate_limits_live || null;
+  // Multi-account: when this CLI session is on an enterprise/monthly
+  // account, five_hour/seven_day come back null on /api/rate-limits.
+  // Anything 5h/7d-shaped on the dashboard sources from RL_MAX instead
+  // (the snapshotted personal Max account). Monthly stays on RL_LIVE.
+  let RL_MAX = DATA.rate_limits_max || null;
   // Infer mode from baked data when the field is missing (pre-fix
   // serve.py won't emit it). Keeps initial render in the right mode
   // so we avoid a flash from weekly → monthly when the live fetch lands.
@@ -3608,27 +3693,36 @@
       (RL_LIVE.five_hour || RL_LIVE.seven_day) ? 'windows'
       : RL_LIVE.monthly ? 'monthly' : 'unknown';
   }
-  let wkResetMsLive = (RL_LIVE && RL_LIVE.seven_day && RL_LIVE.seven_day.resets_at_ms) || null;
-  let h5ResetMsLive = (RL_LIVE && RL_LIVE.five_hour && RL_LIVE.five_hour.resets_at_ms) || null;
+  // 5h/7d accessors prefer RL_MAX (where the populated window data lives
+  // when this CLI session is on an enterprise account).
+  function rlFiveHour() { return (RL_MAX && RL_MAX.five_hour) || (RL_LIVE && RL_LIVE.five_hour) || null; }
+  function rlSevenDay() { return (RL_MAX && RL_MAX.seven_day) || (RL_LIVE && RL_LIVE.seven_day) || null; }
+  let wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || null;
+  let h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || null;
 
   function renderLiveBadges() {
-    if (!RL_LIVE || !RL_LIVE.fetched_at_ms) return;
-    const ageMin = Math.floor((Date.now() - RL_LIVE.fetched_at_ms) / 60000);
-    // Age label only — the "live" prefix was redundant with "just now".
-    const ageLabel = ageMin < 1 ? 'just now'
-                   : ageMin < 60 ? `${ageMin}m ago`
-                   : `${Math.floor(ageMin/60)}h ago`;
-    if (RL_LIVE.five_hour) {
+    function ageStr(fetched_ms) {
+      if (!fetched_ms) return 'unknown';
+      const m = Math.floor((Date.now() - fetched_ms) / 60000);
+      return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m/60)}h ago`;
+    }
+    // 5h + 7d badges age-tag against RL_MAX (where the data lives).
+    // Guard utilization itself — the wrapper object can exist while
+    // utilization is null (e.g. enterprise plans without per-window caps).
+    const fh = rlFiveHour();
+    if (fh && fh.utilization != null) {
       const b = document.getElementById('p5h-live-badge');
-      if (b) { b.textContent = `${ageLabel} · ${RL_LIVE.five_hour.utilization.toFixed(0)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageStr(RL_MAX && RL_MAX.fetched_at_ms)} · ${fh.utilization.toFixed(0)}%`; b.hidden = false; }
     }
-    if (RL_LIVE.seven_day) {
+    const sd = rlSevenDay();
+    if (sd && sd.utilization != null) {
       const b = document.getElementById('pw-live-badge');
-      if (b) { b.textContent = `${ageLabel} · ${RL_LIVE.seven_day.utilization.toFixed(0)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageStr(RL_MAX && RL_MAX.fetched_at_ms)} · ${sd.utilization.toFixed(0)}%`; b.hidden = false; }
     }
-    if (RL_LIVE.monthly) {
+    // Monthly badge stays on RL_LIVE (enterprise extra_usage pool).
+    if (RL_LIVE && RL_LIVE.monthly && RL_LIVE.monthly.utilization != null) {
       const b = document.getElementById('pm-live-badge');
-      if (b) { b.textContent = `${ageLabel} · ${RL_LIVE.monthly.utilization.toFixed(1)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageStr(RL_LIVE.fetched_at_ms)} · ${RL_LIVE.monthly.utilization.toFixed(1)}%`; b.hidden = false; }
     }
   }
 
@@ -3645,8 +3739,10 @@
       const el = document.getElementById(id);
       if (el) el.setAttribute('data-has-source', has ? 'true' : 'false');
     };
-    set('pacing-5h',      !!(rl && rl.five_hour));
-    set('pacing-week',    !!(rl && rl.seven_day));
+    // 5h + 7d may live on RL_MAX (Max account) when this CLI session is
+    // on enterprise; check both. Monthly stays on RL_LIVE only.
+    set('pacing-5h',      !!rlFiveHour());
+    set('pacing-week',    !!rlSevenDay());
     set('pacing-monthly', !!(rl && rl.monthly));
     // After data-has-source is set, sync the manual pill toggles + apply
     // the user's saved show/hide preference. Pills only render for cards
@@ -3672,6 +3768,11 @@
     catch (_) { /* localStorage blocked — preference won't persist */ }
   }
 
+  // Monthly card default: hidden. All others: shown by default.
+  function getPacingDefault(id) {
+    return id !== 'pacing-monthly'; // false = hidden by default for monthly
+  }
+
   function renderPacingToggles() {
     const host = document.getElementById('pacing-toggles');
     if (!host) return;
@@ -3683,15 +3784,24 @@
     PACING_TOGGLE_CARDS.forEach(def => {
       const card = document.getElementById(def.id);
       if (!card) return;
-      const isOn = saved[def.id] !== false; // default: all on
+      // Monthly card defaults OFF; others default ON. Saved pref overrides.
+      const defaultOn = getPacingDefault(def.id);
+      const isOn = saved[def.id] !== undefined ? saved[def.id] !== false : defaultOn;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'pacing-toggle-pill' + (isOn ? ' active' : '');
       btn.textContent = def.label;
       btn.setAttribute('aria-pressed', String(isOn));
+      btn.setAttribute('aria-label',
+        def.id === 'pacing-monthly' ? 'Toggle monthly pacing card' :
+        def.id === 'pacing-week'    ? 'Toggle weekly pacing card'  :
+                                      'Toggle 5-hour pacing card');
       btn.addEventListener('click', () => {
         const cur = readPacingPrefs();
-        cur[def.id] = cur[def.id] !== false ? false : true;
+        // Read current effective state (applying default logic)
+        const curDefault = getPacingDefault(def.id);
+        const curOn = cur[def.id] !== undefined ? cur[def.id] !== false : curDefault;
+        cur[def.id] = !curOn;
         writePacingPrefs(cur);
         renderPacingToggles();
         applyPacingToggleVisibility();
@@ -3705,7 +3815,9 @@
     PACING_TOGGLE_CARDS.forEach(def => {
       const card = document.getElementById(def.id);
       if (!card) return;
-      const isOn = saved[def.id] !== false;
+      // Monthly defaults OFF; others default ON.
+      const defaultOn = getPacingDefault(def.id);
+      const isOn = saved[def.id] !== undefined ? saved[def.id] !== false : defaultOn;
       // Toggle overrides data-has-source CSS — inline style wins specificity.
       card.style.display = isOn ? '' : 'none';
     });
@@ -3713,6 +3825,105 @@
 
   renderLiveBadges();
   refreshPacingVisibility(RL_LIVE);
+
+  // ── Viewport-safe popover positioning ─────────────────────────────────
+  // The Info / Tips popovers (.method-body, .chart-help-body) anchor via
+  // CSS left/right offsets that work for typical layouts but overflow the
+  // viewport when the trigger sits near an edge. On every <details> open
+  // we measure the popover and translate it horizontally so it stays
+  // fully visible with a 12px gutter from each edge.
+  (function initPopoverViewportClamp() {
+    const SELECTOR = '.method-note, details.chart-help, details.chart-help--inline';
+    const BODY_SEL = '.method-body, .chart-help-body';
+    const GUTTER = 12;
+
+    function clampPopover(details) {
+      const body = details.querySelector(BODY_SEL);
+      if (!body) return;
+      // Reset prior translation so we measure the natural position.
+      body.style.transform = '';
+      body.style.left = '';
+      const rect = body.getBoundingClientRect();
+      // documentElement.clientWidth is the layout viewport excluding any
+      // overflowing absolute-positioned content. window.innerWidth can
+      // spike when popovers themselves push the document width on first
+      // open — using it here would feed back stale measurements.
+      const vw = document.documentElement.clientWidth;
+      let dx = 0;
+      if (rect.right > vw - GUTTER) dx = (vw - GUTTER) - rect.right;
+      if (rect.left + dx < GUTTER) dx = GUTTER - rect.left;
+      if (dx) body.style.transform = `translateX(${dx}px)`;
+    }
+
+    document.querySelectorAll(SELECTOR).forEach(d => {
+      d.addEventListener('toggle', () => {
+        if (d.open) requestAnimationFrame(() => clampPopover(d));
+      });
+    });
+
+    window.addEventListener('resize', () => {
+      document.querySelectorAll(SELECTOR + '[open]').forEach(clampPopover);
+    });
+  })();
+
+  // ── Mobile pacing-pair scroll pagination dots ──────────────────────────
+  // IntersectionObserver watches each .pacing-card inside .pacing-pair.
+  // The dot corresponding to the most-visible card is highlighted.
+  (function initPacingScrollDots() {
+    const pair = document.querySelector('.pacing-pair');
+    const dotsHost = document.getElementById('pacing-scroll-dots');
+    if (!pair || !dotsHost) return;
+
+    function buildDotsPacing() {
+      const cards = Array.from(pair.querySelectorAll('.pacing-card'))
+        .filter(c => c.style.display !== 'none');
+      dotsHost.innerHTML = '';
+      cards.forEach((_, i) => {
+        const d = document.createElement('span');
+        d.className = 'pacing-scroll-dot' + (i === 0 ? ' active' : '');
+        dotsHost.appendChild(d);
+      });
+      return cards;
+    }
+
+    let cards = buildDotsPacing();
+
+    // Swipe-hint affordance — set data-swiped="false" until the user
+    // first scrolls. Hint chevron in CSS animates 3 beats then stops.
+    pair.dataset.swiped = 'false';
+    pair.addEventListener('scroll', () => {
+      if (pair.scrollLeft > 8) pair.dataset.swiped = 'true';
+    }, { passive: true });
+
+    // Re-build dots whenever card visibility changes (toggle click)
+    const origApply = applyPacingToggleVisibility;
+    applyPacingToggleVisibility = function() {
+      origApply();
+      cards = buildDotsPacing();
+    };
+
+    if (!('IntersectionObserver' in window)) return;
+
+    const obs = new IntersectionObserver(entries => {
+      // Find the card with the highest intersection ratio
+      let maxRatio = -1, maxIdx = 0;
+      entries.forEach(entry => {
+        const idx = cards.indexOf(entry.target);
+        if (idx >= 0 && entry.intersectionRatio > maxRatio) {
+          maxRatio = entry.intersectionRatio;
+          maxIdx = idx;
+        }
+      });
+      if (maxRatio < 0) return;
+      const dots = dotsHost.querySelectorAll('.pacing-scroll-dot');
+      dots.forEach((d, i) => d.classList.toggle('active', i === maxIdx));
+    }, { root: pair, threshold: [0.5] });
+
+    function observeCards() {
+      cards.forEach(c => obs.observe(c));
+    }
+    observeCards();
+  })();
 
   // Fire-and-forget refresh from the local dev server. When it lands we
   // swap the RL_LIVE constants and re-render the pacing cards so the
@@ -3722,9 +3933,6 @@
     .then(fresh => {
       if (!fresh || fresh.error) return;
       RL_LIVE = fresh;
-      wkResetMsLive = (fresh.seven_day && fresh.seven_day.resets_at_ms) || wkResetMsLive;
-      h5ResetMsLive = (fresh.five_hour && fresh.five_hour.resets_at_ms) || h5ResetMsLive;
-      renderLiveBadges();
       // If the live endpoint pre-dates the mode field (old server),
       // infer mode from the data rather than clobbering the baked-in value.
       const freshMode = fresh.mode ||
@@ -3733,12 +3941,30 @@
       // Write the resolved mode back onto RL_LIVE so pwRenderArgs() and
       // any other downstream consumers see a consistent value.
       RL_LIVE.mode = freshMode;
-      // Refresh per-card visibility based on what's now populated in RL_LIVE.
+      // Reset anchors / badges may have shifted via the rlFiveHour() /
+      // rlSevenDay() accessors when both payloads are present — refresh.
+      wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || wkResetMsLive;
+      h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || h5ResetMsLive;
+      renderLiveBadges();
       refreshPacingVisibility(RL_LIVE);
-      // Re-render pacing so chart anchors snap to fresh reset timestamps
       if (typeof rerenderPacing === 'function') rerenderPacing();
     })
     .catch(() => { /* endpoint unavailable — silent fallback to baked data */ });
+
+  // Parallel fetch for the secondary (Max) account. Same fire-and-forget
+  // pattern. This is what populates 5h/7d on enterprise/monthly accounts —
+  // the keychain's primary OAuth token has those fields null.
+  fetch('/api/rate-limits-max', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(fresh => {
+      if (!fresh || fresh.error) return;
+      RL_MAX = fresh;
+      wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || wkResetMsLive;
+      h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || h5ResetMsLive;
+      renderLiveBadges();
+      if (typeof rerenderPacing === 'function') rerenderPacing();
+    })
+    .catch(() => { /* snapshot missing or refresh failed — keep baked data */ });
 
   // Fire-and-forget live pacing refresh from the local dev server.
   // Patches the 5h window cost in anchored5h with fresh JSONL data so
@@ -3930,10 +4156,12 @@
     // number Anthropic is tracking you against. Falls back to the
     // derived cost/cap ratio when live data isn't available.
     const liveUtil = (prefix === 'p5h')
-      ? (RL_LIVE && RL_LIVE.five_hour && RL_LIVE.five_hour.utilization)
+      ? (rlFiveHour() && rlFiveHour().utilization)
       : (prefix === 'pw')
-        ? (RL_LIVE && RL_LIVE.seven_day && RL_LIVE.seven_day.utilization)
-        : null;
+        ? (rlSevenDay() && rlSevenDay().utilization)
+        : (prefix === 'pm')
+          ? (RL_LIVE && RL_LIVE.monthly && RL_LIVE.monthly.utilization)
+          : null;
     const pctUsed = (liveUtil != null) ? liveUtil : pctDerived;
 
     // Headline: big "21% used" with a precise spent/limit subtitle
@@ -3950,16 +4178,38 @@
       ? 'of ' + capStr + ' implied limit'
       : 'limit not yet inferred';
 
-    // % used row: big number leads, subtitle qualifies.
+    // % used row: bare percentage keeps the span short enough to avoid
+    // wrapping when all three cards are visible. Card title + chart carry
+    // the "used vs elapsed" context.
     if ($('pct-used')) {
       $('pct-used').textContent = (cap > 0 || liveUtil != null)
-        ? pctUsed.toFixed(0) + '% used'
+        ? pctUsed.toFixed(0) + '%'
         : '—';
     }
-    // Elapsed sits next to `% used` as the pacing comparison. Short
-    // form — the card title already tells you which window it is.
     if ($('pct-time')) {
-      $('pct-time').textContent = pctTime.toFixed(0) + '% elapsed';
+      $('pct-time').textContent = pctTime.toFixed(0) + '%';
+    }
+    // Comparison glyph between % used and % elapsed. Was a static "·"
+    // separator; now signals whether you're under pace ("<", green) or
+    // over (">", yellow → red by magnitude). Same severity scale as
+    // the pace-line gradient. Muted "·" when no live data.
+    if ($('pct-sep')) {
+      const sep = $('pct-sep');
+      const haveData = (cap > 0 || liveUtil != null);
+      if (!haveData) {
+        sep.textContent = '·';
+        sep.style.color = '';
+      } else {
+        const delta = pctUsed - pctTime;  // percentage points; positive = over pace
+        if (delta <= 0) {
+          sep.textContent = '<';
+          sep.style.color = T.sonnet;
+        } else {
+          sep.textContent = '>';
+          // Map 0..20pp over → warn..crit. Beyond 20pp clamps to crit.
+          sep.style.color = (delta < 10) ? T.warn : T.crit;
+        }
+      }
     }
 
     // Meta line is only populated for the EXPIRED state now —
@@ -4020,6 +4270,8 @@
     // as "light green" regardless of the data's actual extent.
     let yMin = 0, yMax = 0;
     if (cap > 0 && cumPts.length) {
+      // Include idlePts so the idle-tail decay never falls off the bottom
+      // of the frame (e.g. 16% used at 80% elapsed → delta ≈ −64% cap).
       const allPts = [...cumPts, ...idlePts];
       const deltas = allPts.map(p => p[1]);
       const dMin = Math.min(...deltas, 0);
@@ -4109,11 +4361,12 @@
       animationDuration: REDUCED_MOTION ? 0 : 400,
       aria: { enabled: true, decal: { show: true } },
       // The chart now owns its full rectangle — no title/spent overlays.
-      // top=22 leaves breathing room for (a) the markPoint label above
+      // top=36 leaves breathing room for (a) the markPoint label above
       // the current-spend endpoint when the line is near the upper edge,
-      // and (b) the reset icon that sits above the session-end line.
+      // and (b) the reset icon + timestamp that sits above the session-end
+      // line (icon ~13px + label ~12px + 4px buffer = 29px minimum).
       /* Symmetric L/R margins so the window end reads centered in the
-         pane; icons sit in the top padding (22px). */
+         pane; icons + timestamps sit in the top padding (36px). */
       grid: { left: 10, right: 10, top: 36, bottom: 8, containLabel: false },
       // Pace-relative smooth gradient. 8 color stops evenly spaced
       // across gradMin..gradMax so delta=0 lands exactly on stop 5
@@ -4275,8 +4528,9 @@
             // Tick lines removed to maximize data-ink ratio
 
             // Reset icon + timestamp label at the top of the session-end line.
-            // Label uses position:'insideTop' so it renders within the plot
-            // area rather than in the grid padding (where ECharts clips it).
+            // Label is right-justified to the line (right edge at win.end) and
+            // sits just above the line's top so it never clips off the right
+            // edge of the plot area.
             if (active) {
               ticks.push({
                 coord: [win.end, yMax],
@@ -4355,8 +4609,11 @@
             cap: 'butt',
           },
           z: 1.3,
-          // Small "23%" label above the progress-bar tip, labeling
-          // the elapsed-time value visually tied to the bar.
+          // Small "23%" label below the progress-bar tip, labeling
+          // the elapsed-time value visually tied to the bar. Sits BELOW
+          // the baseline so it never crowds the reset icon at [win.end,
+          // yMax] when pctTime is high (98% of week → elapsed-tip ≈ reset
+          // icon column → label collision was happening at top position).
           markPoint: active ? {
             symbol: 'circle',
             symbolSize: 0,
@@ -4367,7 +4624,7 @@
               label: {
                 show: true,
                 formatter: Math.round(pctTime) + '%',
-                position: 'top',
+                position: 'bottom',
                 distance: 4,
                 color: T.inkMuted,
                 fontFamily: T.mono,
@@ -4625,7 +4882,6 @@
   // encodes the metric's family:
   //   turns/day      — steel blue   (neutral volume · haiku-ish)
   //   cost/day       — gold/amber   (budget · warn hue)
-  //   tokens/turn    — pumpkin      (intensity heat)
   //   cost/turn      — red-orange   (intensity + cost signal)
   //   avg ctx        — indigo       (cognitive load, distinct)
   //   cache hit      — teal/green   (efficiency · good)
@@ -4649,8 +4905,8 @@
     // a deltaDir flag — 'up' means "higher value is bad" (cost/day, turns/day,
     // opus_share, cost/turn, avg_ctx); 'down' means "higher is good" (cache_hit_rate).
     // Score = signed bad-motion magnitude. Sort descending so worst lands left.
-    // Matches the gradient bar (red left = worse, green right = better) AND
-    // the per-tile triangle colors. Null deltas sink to the right.
+    // This matches the gradient bar (red left = "worse", green right = "better")
+    // AND the per-tile triangle colors. Null deltas sink to the right.
     rows.sort((a, b) => {
       const dA = delta(a.value, a.prior);
       const dB = delta(b.value, b.prior);
@@ -6497,13 +6753,13 @@
                legend always off so the trend chart owns its full vertical
                band and labels never collide with toggle controls. */
             legend: { show: false },
-            /* Plot edges match the mekko SVG above (barStartX=20/1000 = 2%).
+            /* Plot edges match the ribbon SVG above (barStartX=0/1000 = 0%).
                containLabel:false keeps the left edge fixed; y-axis labels
                float inside via axisLabel.inside:true. Bottom must accommodate
                x-axis labels without containLabel. */
             grid: {
               top: 26,
-              left: '2%',
+              left: 0,
               right: '2%',
               bottom: 24,
               containLabel: false,
@@ -6583,9 +6839,6 @@
               const inWindow = (d) => d && days.length && d >= days[0] && d <= days[days.length - 1];
               const markData = [];
               if (isTop) {
-                /* markLine event labels — pinned ABOVE the plot so they
-                   never sit on top of the dense stacked areas. 11px floor
-                   restored per labeling guide hard floor. */
                 if (firstOneMDay && inWindow(firstOneMDay)) {
                   markData.push({
                     xAxis: firstOneMDay,
@@ -6594,7 +6847,6 @@
                       color: T.warn, fontFamily: T.mono,
                       fontSize: 11, fontWeight: 700,
                       position: 'end',
-                      distance: 4,
                       formatter: '1M ctx',
                       backgroundColor: T.bg,
                       padding: [3, 7], lineHeight: 13,
@@ -6610,7 +6862,6 @@
                       color: T.sonnet, fontFamily: T.mono,
                       fontSize: 11, fontWeight: 700,
                       position: 'end',
-                      distance: 4,
                       formatter: 'Opus 4.7',
                       backgroundColor: T.bg,
                       padding: [3, 7], lineHeight: 13,
@@ -6713,16 +6964,15 @@
 
     // Port of Python's aggregate_sessions(): group DATA.turns by sid,
     // filter by lookback window, sort by max_ctx desc, take top N.
-    // Filters out light sessions (max_ctx < HEAVY_THRESHOLD) so the
-    // list stays focused on actionable heavy sessions — "ok" and
-    // "monitor" tiers are noise here.
-    const HEAVY_THRESHOLD = 500_000;
+    // Filters out light sessions (max_ctx < HEAVY_THRESHOLD). 200K is
+    // where premium pricing kicks in and context management starts to
+    // matter — includes monitor + consider + compact-now + reset tiers.
+    const HEAVY_THRESHOLD = 200_000;
     function aggregateSessionsJS(lookbackMs) {
       const cutoff = now - lookbackMs;
       const buckets = new Map();
       for (const t of turns) {
         if (t.ts < cutoff) continue;
-        if (t.t === 'headless') continue;  // exclude SDK/headless sessions
         let b = buckets.get(t.s);
         if (!b) {
           b = {
@@ -6759,20 +7009,43 @@
       return out.slice(0, TOP_N);
     }
 
+    // Sort state: col key + direction. Default: max_ctx desc (heaviest first).
+    const TIER_ORDER = { reset: 4, 'compact-now': 3, consider: 2, monitor: 1, ok: 0 };
+    let sessSort = { col: 'max_ctx', dir: -1 };
+    let sessRange = '7d';
+
+    function sortSessions(arr) {
+      const { col, dir } = sessSort;
+      return arr.slice().sort((a, b) => {
+        let va, vb;
+        if (col === 'action') {
+          va = TIER_ORDER[recommendation(a.max_ctx)[0]] ?? 0;
+          vb = TIER_ORDER[recommendation(b.max_ctx)[0]] ?? 0;
+        } else if (col === 'idle_ms') {
+          va = a.idle_ms; vb = b.idle_ms;
+        } else if (col === 'sid') {
+          va = a.sid; vb = b.sid;
+          return dir * va.localeCompare(vb);
+        } else {
+          va = a[col] ?? 0; vb = b[col] ?? 0;
+        }
+        return dir * (va - vb);
+      });
+    }
+
     function renderSessions(range) {
       if (!sessHost) return;
-      const lookback = RANGE_MS[range] || RANGE_MS['7d'];
-      const sessions = aggregateSessionsJS(lookback);
-      if (sessLabel) sessLabel.textContent = RANGE_LABEL[range] || RANGE_LABEL['7d'];
+      sessRange = range || sessRange;
+      const lookback = RANGE_MS[sessRange] || RANGE_MS['7d'];
+      const raw = aggregateSessionsJS(lookback);
+      const sessions = sortSessions(raw);
+      if (sessLabel) sessLabel.textContent = RANGE_LABEL[sessRange] || RANGE_LABEL['7d'];
       if (!sessions.length) {
-        sessHost.innerHTML = '<div class="session-empty">no sessions topped 500K context in the ' + (RANGE_LABEL[range] || 'last 7 days') + ' — you\'re running lean</div>';
+        sessHost.innerHTML = '<div class="session-empty">no sessions above 200K context in the ' + (RANGE_LABEL[sessRange] || 'last 7 days') + ' — you\'re running lean</div>';
         return;
       }
       const rows = sessions.map(s => {
         const [cls, label] = recommendation(s.max_ctx);
-        // Tier class stays on the max-ctx cell too so the number
-        // itself reads hot/cool at a glance — redundant with the
-        // action pill but useful when scanning fast.
         return (
           '<tr>' +
             '<td class="sid">' + s.sid + '</td>' +
@@ -6780,25 +7053,45 @@
             '<td class="num max-ctx tier-' + cls + '">' + fmtK_(s.max_ctx) + '</td>' +
             '<td class="num">' + fmtK_(s.total_ctx) + '</td>' +
             '<td class="ago">' + fmtAgo_(s.idle_ms) + '</td>' +
-            '<td class="resume-col"><button class="resume-btn" data-sid="' + s.sid + '">resume</button></td>' +
           '</tr>'
         );
       }).join('');
+
+      const thClass = (col, extra) => {
+        const isSorted = sessSort.col === col;
+        const cls = ['sortable', extra, isSorted ? (sessSort.dir < 0 ? 'sort-desc' : 'sort-asc') : '']
+          .filter(Boolean).join(' ');
+        return 'class="' + cls + '" data-sort-col="' + col + '"';
+      };
+
       sessHost.innerHTML =
         '<div class="session-scroll"><table class="session-table">' +
           '<thead><tr>' +
-            '<th>session</th>' +
-            '<th>action</th>' +
-            '<th class="num">max ctx</th>' +
-            '<th class="num">total ctx</th>' +
-            '<th>last turn</th>' +
-            '<th></th>' +
+            '<th ' + thClass('sid', '') + '>session</th>' +
+            '<th ' + thClass('action', '') + '>action</th>' +
+            '<th ' + thClass('max_ctx', 'num') + '>max ctx</th>' +
+            '<th ' + thClass('total_ctx', 'num') + '>total ctx</th>' +
+            '<th ' + thClass('idle_ms', '') + '>last turn</th>' +
           '</tr></thead>' +
           '<tbody>' + rows + '</tbody>' +
         '</table></div>';
+
+      // Wire sort clicks
+      sessHost.querySelectorAll('th[data-sort-col]').forEach(th => {
+        th.addEventListener('click', () => {
+          const col = th.dataset.sortCol;
+          if (sessSort.col === col) {
+            sessSort.dir *= -1;
+          } else {
+            sessSort.col = col;
+            sessSort.dir = (col === 'idle_ms' || col === 'sid') ? 1 : -1;
+          }
+          renderSessions();
+        });
+      });
     }
 
-    // Initial render at 7d to match the previous behavior
+    // Initial render at 7d
     renderSessions('7d');
 
     // Wire the toggle
@@ -6817,119 +7110,33 @@
     }
   })();
 
-  // ── Account picker modal (resume session with correct account) ──
-  // Replace ACCOUNT_A_TOKEN and ACCOUNT_B_TOKEN with actual OAuth accessToken
-  // strings from macOS Keychain. The resume command reads current creds,
-  // patches only accessToken, writes back, then runs `claude --resume <sid>`.
-  (function initAccountPicker() {
-    const ACCOUNTS = {
-      A: { label: 'Account A', token: 'ACCOUNT_A_TOKEN' },
-      B: { label: 'Account B', token: 'ACCOUNT_B_TOKEN' },
-    };
 
-    const overlay  = document.getElementById('acct-overlay');
-    const sidEl    = document.getElementById('acct-modal-sid');
-    const cmdWrap  = document.getElementById('acct-cmd-wrap');
-    const cmdText  = document.getElementById('acct-cmd-text');
-    const feedback = document.getElementById('acct-copy-feedback');
-    const cancelEl = document.getElementById('acct-modal-cancel');
-    const btnA     = document.getElementById('acct-btn-a');
-    const btnB     = document.getElementById('acct-btn-b');
-    if (!overlay) return;
-
-    let activeSid = '';
-
-    function openModal(sid) {
-      activeSid = sid;
-      sidEl.textContent = sid;
-      cmdWrap.classList.remove('show');
-      feedback.textContent = '';
-      overlay.classList.add('open');
-    }
-
-    function closeModal() {
-      overlay.classList.remove('open');
-      activeSid = '';
-    }
-
-    function buildCmd(key) {
-      const tok = ACCOUNTS[key].token;
-      // Inline Python: read keychain JSON → patch accessToken → write back → resume
-      const py = [
-        'import subprocess,json',
-        "c=json.loads(subprocess.run(['security','find-generic-password','-s','Claude Code-credentials','-w'],capture_output=True,text=True).stdout)",
-        `c.setdefault('claudeAiOauth',{})['accessToken']='${tok}'`,
-        "subprocess.run(['security','add-generic-password','-U','-s','Claude Code-credentials','-w',json.dumps(c)])",
-      ].join(';');
-      return `python3 -c "${py}" && claude --resume ${activeSid}`;
-    }
-
-    function selectAccount(key) {
-      cmdText.textContent = buildCmd(key);
-      cmdWrap.classList.add('show');
-      feedback.textContent = '';
-    }
-
-    if (btnA) btnA.addEventListener('click', () => selectAccount('A'));
-    if (btnB) btnB.addEventListener('click', () => selectAccount('B'));
-    if (cancelEl) cancelEl.addEventListener('click', closeModal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-
-    // Delegated click on dynamically rendered resume buttons
-    document.addEventListener('click', e => {
-      const btn = e.target.closest('.resume-btn');
-      if (!btn) return;
-      openModal(btn.dataset.sid);
-    });
-
-    // Click-to-copy the generated command
-    if (cmdText) {
-      cmdText.addEventListener('click', () => {
-        navigator.clipboard.writeText(cmdText.textContent).then(() => {
-          feedback.textContent = '✓ copied';
-          setTimeout(() => { feedback.textContent = ''; }, 2000);
-        }).catch(() => {
-          // Fallback: select all text
-          const r = document.createRange();
-          r.selectNodeContents(cmdText);
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(r);
-        });
-      });
-    }
-  })();
-
-  // Per-chart unit toggle ($/tok) — each card independent
-  document.querySelectorAll('.chart-unit-toggle').forEach(toggle => {
-    const prefix = toggle.dataset.prefix;
-    toggle.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const unit = btn.dataset.unit;
-        if (chartUnit[prefix] === unit) return;
-        chartUnit[prefix] = unit;
-        toggle.querySelectorAll('button').forEach(b => {
-          const active = b.dataset.unit === unit;
-          b.classList.toggle('active', active);
-          b.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
-        // Rebuild just this card's chart
-        const eff2 = effectiveCaps();
-        if (prefix === 'p5h') {
-          if (p5hChart) p5hChart.dispose();
-          p5hChart = renderPacing('p5h', FIVE_HRS, effective5hWindows(), eff2.cap5hUsd, eff2.cap5hTok);
-          if (p5hChart) hookResize(p5hChart, document.getElementById('p5h-chart'));
-        } else if (prefix === 'pw') {
-          if (pwChart) pwChart.dispose();
-          pwChart = renderPacing('pw', SEVEN_DAYS, effectiveWkWindows(), eff2.capWkUsd, eff2.capWkTok);
-          if (pwChart) hookResize(pwChart, document.getElementById('pw-chart'));
-        } else if (prefix === 'pm') {
-          if (pmChart) pmChart.dispose();
-          const pmArgs3 = pmRenderArgs();
-          pmChart = pmArgs3 ? renderPacing('pm', ...pmArgs3) : null;
-          if (pmChart) hookResize(pmChart, document.getElementById('pm-chart'));
-        }
-      });
+  // Per-chart unit coin ($ ↔ tok) — single-button toggle, theme-toggle pattern.
+  // The visible glyph reflects the CURRENT unit; clicking flips state and
+  // rebuilds just that card's chart. Each card is independent.
+  document.querySelectorAll('.chart-unit-coin').forEach(coin => {
+    const prefix = coin.dataset.prefix;
+    coin.addEventListener('click', () => {
+      const next = coin.dataset.unit === 'usd' ? 'tokens' : 'usd';
+      coin.dataset.unit = next;
+      coin.textContent = next === 'usd' ? '$' : 'T';
+      chartUnit[prefix] = next;
+      // Rebuild just this card's chart
+      const eff2 = effectiveCaps();
+      if (prefix === 'p5h') {
+        if (p5hChart) p5hChart.dispose();
+        p5hChart = renderPacing('p5h', FIVE_HRS, effective5hWindows(), eff2.cap5hUsd, eff2.cap5hTok);
+        if (p5hChart) hookResize(p5hChart, document.getElementById('p5h-chart'));
+      } else if (prefix === 'pw') {
+        if (pwChart) pwChart.dispose();
+        pwChart = renderPacing('pw', SEVEN_DAYS, effectiveWkWindows(), eff2.capWkUsd, eff2.capWkTok);
+        if (pwChart) hookResize(pwChart, document.getElementById('pw-chart'));
+      } else if (prefix === 'pm') {
+        if (pmChart) pmChart.dispose();
+        const pmArgs3 = pmRenderArgs();
+        pmChart = pmArgs3 ? renderPacing('pm', ...pmArgs3) : null;
+        if (pmChart) hookResize(pmChart, document.getElementById('pm-chart'));
+      }
     });
   });
 
@@ -7039,9 +7246,13 @@
     if (!btn) return;
     btn.addEventListener('click', () => {
       const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      // Default is light (early script: !== 'dark' → light). Toggle stores
+      // 'dark' to flip; removes the key to revert to default light. Both
+      // branches mirror the early script's contract — fixes a previous
+      // bug where both branches led to light.
       try {
-        if (isLight) localStorage.removeItem('cum-theme');
-        else          localStorage.setItem('cum-theme', 'light');
+        if (isLight) localStorage.setItem('cum-theme', 'dark');
+        else          localStorage.removeItem('cum-theme');
       } catch (e) { /* localStorage blocked — theme won't persist, still flip once via reload */ }
       location.reload();
     });
@@ -7059,47 +7270,59 @@
   box-shadow: 0 4px 20px rgba(0,0,0,0.7);
 "></div>
 
-<!-- Account picker modal — resume a session under a specific account -->
-<div class="acct-overlay" id="acct-overlay">
-  <div class="acct-modal">
-    <div class="acct-modal-label">Resume session</div>
-    <div class="acct-modal-sid" id="acct-modal-sid"></div>
-    <div class="acct-btns">
-      <button class="acct-btn acct-a" id="acct-btn-a">Account A</button>
-      <button class="acct-btn acct-b" id="acct-btn-b">Account B</button>
-    </div>
-    <div class="acct-cmd-wrap" id="acct-cmd-wrap">
-      <div class="acct-cmd-hint">paste in terminal ↓</div>
-      <div class="acct-cmd-text" id="acct-cmd-text"></div>
-      <div class="acct-copy-feedback" id="acct-copy-feedback"></div>
-    </div>
-    <button class="acct-cancel" id="acct-modal-cancel">cancel</button>
-  </div>
-</div>
 <!-- ─── Dashboard Tour ────────────────────────────────────────────────────
      Spotlight guide. Selector-driven — update STEPS when layout changes.
      Auto-starts with ?tour in URL. Button always available bottom-right.
   ──────────────────────────────────────────────────────────────────────── -->
 <style>
+  /* Iridescent animated border via ::before pseudo + inner fill via ::after.
+     Sliding linear-gradient through 6 vibrant hues + pulsing glow shadow.
+     Popover gets the narrow (1px) version of the same ring. */
   #tour-launch-btn {
     position: fixed; bottom: 22px; right: 22px; z-index: 900;
     display: flex; align-items: center; gap: 7px;
-    padding: 8px 16px; border-radius: 20px;
-    background: var(--ink); color: var(--bg);
-    font: 600 11px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 9px 17px; border-radius: 20px;
+    background: var(--surface, #1a1824); color: var(--ink);
+    font: 700 11px/1 var(--mono); letter-spacing: 0.07em; text-transform: uppercase;
     border: none; cursor: pointer;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.28);
-    transition: opacity 150ms;
+    animation: tour-btn-glow 2.4s ease-in-out infinite alternate;
+    transition: opacity 150ms, transform 120ms;
   }
-  #tour-launch-btn:hover { opacity: 0.82; }
+  #tour-launch-btn:hover { opacity: 0.9; transform: scale(1.04); }
   #tour-launch-btn.t-hidden { display: none; }
+  /* Iridescent border ring — 2px thick on the launch button. */
+  #tour-launch-btn::before {
+    content: '';
+    position: absolute; inset: -2px; border-radius: 22px; z-index: -1;
+    background: linear-gradient(135deg,
+      #ff6b6b 0%, #feca57 18%, #48dbfb 36%,
+      #c56cf0 54%, #ff9ff3 72%, #54a0ff 90%, #ff6b6b 100%);
+    background-size: 300% 300%;
+    animation: tour-iris 3.5s ease infinite;
+  }
+  /* Solid fill behind the text so the gradient doesn't bleed through. */
+  #tour-launch-btn::after {
+    content: '';
+    position: absolute; inset: 2px; border-radius: 18px; z-index: -1;
+    background: var(--surface, #1a1824);
+  }
+  @keyframes tour-iris {
+    0%   { background-position: 0%   50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0%   50%; }
+  }
+  @keyframes tour-btn-glow {
+    from { box-shadow: 0 0 10px rgba(72,219,251,0.45), 0 2px 16px rgba(0,0,0,0.3); }
+    to   { box-shadow: 0 0 18px rgba(197,108,240,0.55), 0 2px 20px rgba(0,0,0,0.3); }
+  }
 
-  /* Spotlight: fixed div matching target rect; box-shadow is the overlay */
+  /* Spotlight: fixed div matching target rect; box-shadow is the overlay.
+     Bright white outline so it pops cleanly against the dark dim layer. */
   #tour-hl {
     position: fixed; z-index: 1000; pointer-events: none;
     border-radius: 9px;
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.56);
-    outline: 2px solid rgba(255,255,255,0.16);
+    outline: 2px solid #fff;
     transition: top 260ms ease, left 260ms ease,
                 width 260ms ease, height 260ms ease, opacity 180ms;
   }
@@ -7137,6 +7360,18 @@
     #tour-pop::before { animation: none; }
   }
   #tour-pop.t-hidden { opacity: 0; pointer-events: none; transform: translateY(5px); }
+  /* Mobile: tour card pinned to viewport bottom, full-width */
+  @media (max-width: 768px) {
+    #tour-pop {
+      width: auto !important;
+      left: 12px !important;
+      right: 12px !important;
+      top: auto !important;
+      bottom: 12px !important;
+      max-height: 45vh;
+      overflow-y: auto;
+    }
+  }
   #tour-pop-step  { font: 500 10px/1 var(--mono); color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
   #tour-pop-title { font: 700 16px/1.25 var(--sans, system-ui, sans-serif); color: var(--ink); margin-bottom: 8px; }
   #tour-pop-body  { font: 400 14px/1.6 var(--sans, system-ui, sans-serif); color: var(--ink-muted); margin-bottom: 14px; }
@@ -7146,14 +7381,14 @@
   .tour-nav-btns { display: flex; gap: 6px; }
   .tour-nav-btn {
     padding: 6px 13px; border-radius: 6px;
-    border: 1px solid var(--tint-strong);
+    border: 1px solid var(--border-accent);
     background: transparent; color: var(--ink); cursor: pointer;
     font: 600 11px/1 var(--mono); letter-spacing: 0.03em;
-    transition: background 120ms;
+    transition: background 120ms, border-color 120ms;
   }
-  .tour-nav-btn:hover { background: var(--tint-weak); }
-  .tour-nav-btn.t-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-  .tour-nav-btn.t-primary:hover { opacity: 0.84; background: var(--ink); }
+  .tour-nav-btn:hover { background: var(--tint-weak); border-color: var(--accent); }
+  .tour-nav-btn.t-primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .tour-nav-btn.t-primary:hover { opacity: 0.85; background: var(--accent); border-color: var(--accent); }
   #tour-skip { font: 400 11px/1 var(--mono); color: var(--ink-muted); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; opacity: 0.65; }
   #tour-skip:hover { opacity: 1; }
   #tour-dots { display: flex; gap: 5px; align-items: center; }
@@ -7184,11 +7419,11 @@
 <script>
 (function () {
   // ── Steps ──────────────────────────────────────────────────────────────
-  // target: CSS selector for the element to spotlight (null = centered modal)
-  // cardAnchor: named position for the popover card (center / rightDock / leftDock)
-  //   — omit to inherit the previous step's anchor (card stays put)
-  // demo: key into DEMO_RUNNERS to kick off a live demo on this step
-  // pad: px of breathing room around the target rect
+  // target:     CSS selector for the element to spotlight (null = centered modal)
+  // pad:        px of breathing room around the target rect
+  // cardAnchor: where the popover docks. 'center' | 'rightDock' | 'aboveStrip'.
+  //             Omitted = inherit the previous step's anchor (card stays put).
+  // Reading order: TL pacing → TR sessions → BL at-a-glance + trends → BR context depth.
   const STEPS = [
     {
       title: 'Interactive dashboard tour',
@@ -7245,7 +7480,7 @@
       body:  'Three toggle groups control the evolution chart. <strong>Metric</strong>: tokens or turns. <strong>Scale</strong>: Share (% composition) or Level (absolute). <strong>Range</strong>: 7d / 30d / 90d / All. Mix and match — e.g. turns × level × 7d to see raw daily activity.',
       target: '.heavy-trend-toggles',
       pad: 8,
-      // inherits leftDock
+      // inherits aboveStrip
     },
     {
       title: 'Download your data',
@@ -7304,7 +7539,20 @@
   let _anchorState = { name: null, top: 0, left: 0 };
   function _resetAnchorState() { _anchorState = { name: null, top: 0, left: 0 }; }
 
+  const isMobile = () => window.innerWidth < 768;
+
   function placePop(_hlRect, anchor) {
+    // Mobile: always bottom-dock regardless of the step's cardAnchor.
+    // CSS handles the actual pinning (position:fixed, bottom:12px, left/right:12px).
+    // We only need to clear any top/left inline styles so the CSS rules win.
+    if (isMobile()) {
+      pop.style.top  = '';
+      pop.style.left = '';
+      // Store a sentinel so inheriting steps detect the same "anchor" and don't recompute
+      _anchorState = { name: 'mobileBottomDock', top: 0, left: 0 };
+      return;
+    }
+
     const PAD = 20;
     const pw = pop.offsetWidth  || 320;
     const ph = pop.offsetHeight || 200;
@@ -7355,6 +7603,24 @@
     _anchorState = { name: a, top, left };
     pop.style.top  = top  + 'px';
     pop.style.left = left + 'px';
+  }
+
+  // Mobile-specific scroll: puts the spotlight target in the available
+  // space ABOVE the bottom-docked tour card (not scrollIntoView center).
+  function scrollTargetIntoViewMobile(el) {
+    const r = el.getBoundingClientRect();
+    const PAD = 12;
+    const ph = pop.offsetHeight || 200;
+    // Top of card in viewport coords
+    const cardTopInVw = window.innerHeight - ph - PAD;
+    // We want to center the target in the available space above the card
+    const usableHeight = cardTopInVw - PAD;
+    const desiredTopInVw = Math.max(PAD, (usableHeight - r.height) / 2 + PAD);
+    const delta = r.top - desiredTopInVw;
+    // Clamp: don't scroll past document top or bottom
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    const targetScroll = Math.max(0, Math.min(maxScroll, window.scrollY + delta));
+    window.scrollTo({ top: targetScroll, behavior: 'smooth' });
   }
 
   // ── Step demos ─────────────────────────────────────────────────────────
@@ -7445,7 +7711,11 @@
     // Scroll target into view, then glide the highlight to its new rect.
     // The card repositions only when its cardAnchor changes (or on first
     // step). Inheriting steps reuse the stored coords for true static.
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (isMobile()) {
+      scrollTargetIntoViewMobile(el);
+    } else {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     setTimeout(() => {
       const r = el.getBoundingClientRect();
       const p = s.pad || 6;

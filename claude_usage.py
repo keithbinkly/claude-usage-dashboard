@@ -8,7 +8,7 @@ open locally. Nothing leaves your machine.
 Usage:
     python3 claude_usage.py                   # dashboard.html in cwd
     python3 claude_usage.py --out ~/usage.html
-    python3 claude_usage.py --days 7          # lookback window (default: all-time)
+    python3 claude_usage.py --days 7          # lookback window (default 21)
     python3 claude_usage.py --open            # open the file when done
 
 The dashboard includes:
@@ -1743,11 +1743,11 @@ def to_json(ds: Dataset) -> str:
         "first_1m_ms": getattr(ds, "first_1m_ms", None),
         "calibrations": calibrations_summary,
         # ── Ground-truth rate limits (live fetch at regen time) ──
-        # rate_limits_live is skipped for sample builds — it would embed the
+        # rate_limits_live skipped for sample builds — would embed the
         # generator's live token data into a public demo file.
         "rate_limits_live": None if getattr(ds, "is_sample", False) else fetch_rate_limits_live(turns=ds.turns),
         # ── Secondary account (Max) — populated only when snapshot exists ──
-        # rate_limits_max is always skipped for sample builds: the snapshot
+        # rate_limits_max always skipped for sample builds: the snapshot
         # contains real account email + UUID which must not ship publicly.
         "rate_limits_max":  None if getattr(ds, "is_sample", False) else fetch_rate_limits_for_max(turns=ds.turns),
         # ── Preview payload (Phase 0 chart previews) ──
