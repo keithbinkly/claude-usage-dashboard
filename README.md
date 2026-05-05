@@ -4,7 +4,7 @@ A self-contained Claude usage dashboard for Claude Code Max users — tracks pac
 
 **[Live demo (simulated data) →](https://data-centered.com/tools/claude-usage-monitor/dashboard.html)**
 
-![Claude Usage Dashboard overview](docs/screenshot-overview.png)
+<img width="800" height="448" alt="claude-usage-demo-vid2x" src="https://github.com/user-attachments/assets/1b923ca8-bbb5-4777-9588-bb9f340abe27" />
 
 ---
 
