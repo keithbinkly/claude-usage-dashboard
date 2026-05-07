@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "claude-usage-dashboard",
+  "version": "0.1.0",
+  "description": "Local Claude Code token-usage dashboard. Reads ~/.claude/projects/*.jsonl, renders a self-contained HTML dashboard with rolling 5h/weekly gauges, per-day pacing, and heaviest-session breakdowns. No data leaves the machine.",
+  "author": {
+    "name": "Keith Binkly",
+    "email": "127554212+keith-gd@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/keithbinkly/claude-usage-dashboard",
+  "repository": "https://github.com/keithbinkly/claude-usage-dashboard",
+  "keywords": [
+    "claude-code",
+    "usage",
+    "tokens",
+    "rate-limit",
+    "dashboard",
+    "observability"
+  ]
+}
