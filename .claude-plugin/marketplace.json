@@ -1,0 +1,21 @@
+{
+  "name": "claude-usage-dashboard",
+  "description": "Single-plugin marketplace for the Claude Usage Dashboard",
+  "owner": {
+    "name": "Keith Binkly",
+    "email": "127554212+keith-gd@users.noreply.github.com"
+  },
+  "plugins": [
+    {
+      "name": "claude-usage-dashboard",
+      "description": "Local Claude Code token-usage dashboard. Reads ~/.claude/projects/*.jsonl, renders rolling 5h/weekly gauges, per-day pacing, heaviest-session breakdowns. No data egress.",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "Keith Binkly",
+        "email": "127554212+keith-gd@users.noreply.github.com"
+      },
+      "homepage": "https://github.com/keithbinkly/claude-usage-dashboard"
+    }
+  ]
+}
