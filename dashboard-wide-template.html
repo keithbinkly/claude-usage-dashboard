@@ -5148,15 +5148,17 @@
       timeZone: 'America/Los_Angeles',
       year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(new Date(ms));
-    let firstOneMDay = null;
-    if (DATA.first_1m_ms) {
-      firstOneMDay = fmtPTDate(DATA.first_1m_ms);
-    }
+    // 1M context GA (Sonnet/Opus 4.6) shipped 2026-03-13 — public platform
+    // event, not the personal first-use anchor that DATA.first_1m_ms
+    // tracks. Using the GA date keeps the marker as a true platform anchor
+    // (~5 weeks before Opus 4.7), which is what readers expect.
+    const ONE_M_GA = '2026-03-13';
+    const todayPT = fmtPTDate(Date.now());
+    const firstOneMDay = todayPT >= ONE_M_GA ? ONE_M_GA : null;
     // Opus 4.7 general availability: 2026-04-16.
     // Model releases on the trends chart let Keith see behavior changes
     // coinciding with each new model (context bump, capability shift).
     const OPUS_47_RELEASE = '2026-04-16';
-    const todayPT = fmtPTDate(Date.now());
     // Only show the Opus 4.7 marker if the data actually reaches that
     // date (it will for any regen after 2026-04-16).
     const showOpus47Marker = todayPT >= OPUS_47_RELEASE;
@@ -6709,9 +6711,14 @@
           timeZone: 'America/Los_Angeles',
           year: 'numeric', month: '2-digit', day: '2-digit',
         }).format(new Date(ms));
-        const firstOneMDay = DATA.first_1m_ms ? _fmtPTDate(DATA.first_1m_ms) : null;
+        // 1M context GA (Sonnet/Opus 4.6) shipped 2026-03-13 — see the
+        // matching block in the trends-chart scope above for why we anchor
+        // to the platform GA instead of personal first-use.
+        const ONE_M_GA = '2026-03-13';
+        const _todayPT = _fmtPTDate(Date.now());
+        const firstOneMDay = _todayPT >= ONE_M_GA ? ONE_M_GA : null;
         const OPUS_47_RELEASE = '2026-04-16';
-        const showOpus47Marker = _fmtPTDate(Date.now()) >= OPUS_47_RELEASE;
+        const showOpus47Marker = _todayPT >= OPUS_47_RELEASE;
 
         // All daily stats, we slice per-range inside buildSeries.
         const allDaily = DATA.daily_stats || [];
