@@ -1637,8 +1637,18 @@
     font-size: var(--fs-sm);
     color: var(--ink-dim);
     line-height: 1.45;
-    margin: 0 0 10px 0;
+    margin: 0;
     max-width: 72ch;
+  }
+  /* Note + toggle on one row — toggle right-aligned, vertically centered
+     against the (multi-line) note. No dedicated toolbar row, no dead gap
+     above the KPI strip. (Round-2 Issue 3.) */
+  .trends-kpi-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin: 0 0 10px 0;
   }
   .strip-mode-toggle {
     display: inline-flex;
@@ -3274,12 +3284,19 @@
     <div class="trends-kpi-block">
       <div class="trends-kpi-head">
         <h2 class="trends-kpi-title">At a glance</h2>
+      </div>
+      <!-- Note + toggle share ONE row: note on the left, toggle right-
+           aligned. The toggle stays scoped to the KPI strip (sits just
+           above it) but costs no extra vertical space — no dead gap
+           between the description and the tiles.
+           (Round-2 Issue 3 — bead analytics-workspace-2ks, 2026-05-15.) -->
+      <div class="trends-kpi-toolbar">
+        <p class="trends-kpi-note" id="trends-kpi-note">Tiles compare the most recent 7 days to the 7 days before that, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart.</p>
         <div class="strip-mode-toggle" role="tablist" aria-label="KPI comparison window">
           <button type="button" data-strip-mode="7v7" class="active" role="tab" aria-selected="true">7d vs prior 7d</button>
           <button type="button" data-strip-mode="24v7" role="tab" aria-selected="false">24h vs prior 7d</button>
         </div>
       </div>
-      <p class="trends-kpi-note" id="trends-kpi-note">Tiles compare the most recent 7 days to the 7 days before that, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart.</p>
       <div class="metric-strip-wrap" id="metric-strip-wrap">
         <div class="metric-strip" id="metric-strip" data-polish="metric-strip"><p class="session-empty">Loading…</p></div>
         <div class="kpi-sort-bar" aria-label="Sort direction: metrics moved worse on the left, better on the right"></div>
@@ -4735,9 +4752,21 @@
   }
 
   const WINDOW_DAYS = 7;  // BAN comparison window size
-  const recent = daily.slice(-WINDOW_DAYS);
-  const prior  = daily.slice(-2*WINDOW_DAYS, -WINDOW_DAYS);
-  const sparkDays = daily.slice(-3*WINDOW_DAYS);  // 21 days for the inline sparkline
+  // Drop the trailing incomplete (partial) current day so the rolling
+  // averages used by the KPI tiles match the LAST COMPLETE day on the
+  // 7-day rolling line in the chart below. Without this, today's partial
+  // numbers pull the average down and create an apparent mismatch
+  // between the KPI value and the line on the chart.
+  // (Bug fix 2026-05-14 — bead analytics-workspace-2ks Feature 3.)
+  const _todayPT = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const _lastDayIsToday = daily.length > 0 && daily[daily.length - 1].day === _todayPT;
+  const _completeDaily = _lastDayIsToday ? daily.slice(0, -1) : daily;
+  const recent = _completeDaily.slice(-WINDOW_DAYS);
+  const prior  = _completeDaily.slice(-2*WINDOW_DAYS, -WINDOW_DAYS);
+  const sparkDays = _completeDaily.slice(-3*WINDOW_DAYS);  // 21 days for the inline sparkline
 
   function delta(r, p) {
     if (!p) return null;
@@ -5158,12 +5187,32 @@
         }
         return out;
       })();
-      const rolling = rollingArr.map((v, i) => [data[i][0], v]);
+      // Drop the final point from the rolling-average line when it
+      // represents an INCOMPLETE current day/week — that partial
+      // bucket drags the rolling average down and made the line
+      // disagree with the KPI tile (which now uses complete-day data).
+      // Keep the partial bucket as a BAR (raw value is still useful as
+      // a "today so far" indicator), just exclude it from the smoothed
+      // line. (Bug fix 2026-05-14 — bead analytics-workspace-2ks Feature 3.)
+      const _lastBucketDay = data.length ? data[data.length - 1][0] : null;
+      const _lastIsPartial = (currentGranularity === 'day')
+        ? (_lastBucketDay === todayPT)
+        : (_lastBucketDay && todayPT >= _lastBucketDay &&
+           // Week bucket starts on Monday; treat as partial if today is
+           // in that Mon→Sun span.
+           (new Date(todayPT + 'T12:00:00') - new Date(_lastBucketDay + 'T12:00:00')) < 7 * 86400000);
+      const rolling = rollingArr.map((v, i) => [data[i][0], v])
+        .filter((_, i) => !(_lastIsPartial && i === rollingArr.length - 1));
       trendsChart.setOption({
         backgroundColor: 'transparent',
         animation: !REDUCED_MOTION,
         animationDuration: REDUCED_MOTION ? 0 : 400,
-        aria: { enabled: true, decal: { show: true } },
+        // aria.decal is OFF — when on, ECharts auto-decals EVERY series,
+        // which painted a dash pattern onto the rolling-avg line ("white
+        // dashes taking bites out of it"). The bar hatch is instead
+        // applied explicitly on the bar series' itemStyle.decal below, so
+        // the line stays clean. (Round-2 Issue 1 — bead analytics-workspace-2ks.)
+        aria: { enabled: true, decal: { show: false } },
         /* Chart body reaches the card edges — we reclaim the 18px of
            card-side padding + keep grid margins minimal. Left margin
            still holds y-axis labels (fmtNum output like "800k").
@@ -5171,7 +5220,10 @@
            handles + last bar's right edge. */
         grid: IS_MOBILE
           ? { left: 0, right: 0, top: 20, bottom: 56, containLabel: false }
-          : { left: 42, right: 6, top: 20, bottom: 56 },
+          // top:34 gives the markPoint callouts (bar max/min + rolling-avg
+          // most-recent) headroom so they don't clip the top edge when a
+          // tall bar reaches near the plot ceiling. (Round-2 Issue 2.)
+          : { left: 42, right: 6, top: 34, bottom: 56 },
         tooltip: {
           trigger: 'axis',
           confine: true,
@@ -5197,7 +5249,9 @@
               ? new Date(day + 'T12:00:00').toLocaleDateString('en-US',
                   { weekday: 'short', month: 'short', day: 'numeric' })
               : '';
-            const lines = ['<div style="font-weight:700;color:#fff">' + dayLabel + '</div>'];
+            // Date header uses T.ink (theme-aware) — was hardcoded #fff which
+            // rendered white-on-white in light mode (Bug fix 2026-05-14).
+            const lines = ['<div style="font-weight:700;color:' + T.ink + '">' + dayLabel + '</div>'];
             for (const p of params) {
               if (p.data[1] == null) continue;
               lines.push(p.marker + p.seriesName + ': <b>' + m.fmt(p.data[1]) + '</b>');
@@ -5276,22 +5330,25 @@
         series: [
           { name: currentGranularity === 'week' ? 'weekly' : 'daily',
             type: 'bar', data: data,
-            itemStyle: { color: m.line + '55' }, barWidth: '70%', z: 1,
-            label: {
-              show: true,
-              position: 'top',
-              formatter: p => {
-                const v = Array.isArray(p.value) ? p.value[1] : p.value;
-                if (v == null || Number.isNaN(v)) return '';
-                const isLast = p.dataIndex === data.length - 1;
-                const interval = currentGranularity === 'week' ? 1 : 7;
-                if (!isLast && p.dataIndex % interval !== 0) return '';
-                return m.fmt(v);
+            // Diagonal hatch decal applied explicitly (chart-wide
+            // aria.decal is off so the rolling-avg line stays solid).
+            // Mirrors ECharts' default decal look the bars had before.
+            itemStyle: {
+              color: m.line + '55',
+              decal: {
+                symbol: 'rect', color: 'rgba(0,0,0,0.10)',
+                dashArrayX: [1, 0], dashArrayY: [2, 5],
+                rotation: -Math.PI / 4,
               },
-              color: T.inkMuted,
-              fontFamily: T.mono,
-              fontSize: 9,
             },
+            barWidth: '70%', z: 1,
+            // No per-bar data labels — ~60 daily bars is past the "21+ →
+            // no data labels" density floor. The every-7th-bar labels
+            // were the surface the rolling-avg line labels collided with
+            // (data-storytelling annotation-and-labeling.md §1.1, L1/L14).
+            // The bar markPoint below still calls out the max/min day.
+            // (Round-2 Issue 2 — bead analytics-workspace-2ks.)
+            label: { show: false },
             markPoint: IS_MOBILE ? undefined : {
               symbol: 'circle',
               symbolSize: 6,
@@ -5317,7 +5374,43 @@
           { name: (currentGranularity === 'week' ? '4-week' : '7-day') + ' rolling avg',
             type: 'line', data: rolling,
             showSymbol: false, smooth: false,
-            lineStyle: { color: m.line, width: 2.5 }, z: 2,
+            // SOLID line — chart-wide aria.decal is now off (it had been
+            // painting a dash decal onto the line). (Round-2 Issue 1.)
+            itemStyle: { color: m.line },
+            lineStyle: { color: m.line, width: 2.5, type: 'solid' }, z: 4,
+            // No per-point data labels. ~60 daily points is well past the
+            // "21+ → no data labels" density floor (data-storytelling
+            // annotation-and-labeling.md §1.1). The dense staggered run
+            // collided with bar labels and clipped at the chart edges.
+            // Instead: ONE intentional markPoint callout on the most
+            // recent rolling-avg value — the number that matches the KPI
+            // tile. (The global max is an artifact of the small early
+            // window, so it fails Test 1 "is this value important to the
+            // story" and is deliberately NOT labeled.)
+            // (Round-2 Issue 2 — bead analytics-workspace-2ks.)
+            label: { show: false },
+            markPoint: IS_MOBILE ? undefined : (() => {
+              const lastIdx = rolling.length - 1;
+              if (lastIdx < 0) return undefined;
+              const last = rolling[lastIdx];
+              return {
+                symbol: 'circle', symbolSize: 7,
+                itemStyle: { color: m.line, borderColor: T.bg, borderWidth: 1.5 },
+                data: [
+                  // Most-recent rolling-avg value = the KPI-tile number.
+                  // Callout opens LEFT so it never clips the right edge.
+                  { coord: [last[0], last[1]],
+                    label: {
+                      show: true, position: 'left', distance: 12,
+                      backgroundColor: m.line,
+                      color: '#ffffff', fontFamily: T.mono,
+                      fontSize: 11, fontWeight: 700,
+                      padding: [3, 7], borderRadius: 4,
+                      formatter: () => m.fmt(last[1]),
+                    } },
+                ],
+              };
+            })(),
             markLine: (() => {
               const mlData = [
                 ...(firstOneMDay ? [{
@@ -7261,13 +7354,18 @@
 })();
 </script>
 <!-- Shared rich tooltip for KPI metric tiles. Positioned at cursor by
-     positionTooltip() in renderMetricStrip; replaces bare title attr. -->
+     positionTooltip() in renderMetricStrip; replaces bare title attr.
+     Background/border read from theme vars so the tooltip flips with
+     light/dark mode (Bug fix 2026-05-14: was hardcoded #0f0f1a → showed
+     as a black square in light mode). */ -->
 <div id="kpi-tooltip" style="
   position: fixed; z-index: 9999; pointer-events: none;
-  background: #0f0f1a; border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink, #e8e8f0);
+  background: var(--tooltip-bg, #0f0f1a);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 8px; padding: 8px 12px; font-size: 12px;
+  color: var(--ink, #e8e8f0);
   white-space: nowrap; display: none; line-height: 1.6;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+  box-shadow: 0 4px 20px var(--pane-shadow, rgba(0,0,0,0.7));
 "></div>
 
 <!-- ─── Dashboard Tour ────────────────────────────────────────────────────
