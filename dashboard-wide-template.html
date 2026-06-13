@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex, nofollow">
 <!-- Auto-reload every 5 min to pick up fresh data from the launchd agent. -->
 <meta http-equiv="refresh" content="300">
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&f[]=satoshi@300,400,500,700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
 <script>
   /* Apply saved theme BEFORE first paint. Prevents a dark→light flash
@@ -53,16 +53,28 @@
     --tint-header:    rgba(255, 255, 255, 0.04);   /* sticky table header bg */
     --tint-strong-2:  rgba(255, 255, 255, 0.08);   /* hover backgrounds, stronger borders */
     --tooltip-bg:     rgba(14, 13, 19, 0.95);
-    --body-texture:   url('/showcase/data-stories/textures/dark-leather.png');
+    --body-texture:   none;
 
-    --display: 'Satoshi', system-ui, sans-serif;
-    --sans:    'Satoshi', 'Source Serif 4', system-ui, sans-serif;
-    --body:    'Satoshi', system-ui, sans-serif;
+    --display: Palatino, "Palatino Linotype", "Book Antiqua", Georgia, ui-serif, serif;
+    --sans:    "Inter Tight", "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --body:    "Inter Tight", "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
     --mono:    'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
 
     --model-opus:   #e26a3f;
+    --model-fable:  #e8547a;
     --model-sonnet: #82ad95;
     --model-haiku:  #6b8ec4;
+    /* Band palette — sequential warm ramp light→deep with ctx size.
+       Green/red are RESERVED for directional signals (deltas, gauge fills).
+       Sonnet + Haiku are distinct "different model family" hues. */
+    --band-ctx-1:   #e8d5a3;   /* <200K  — pale warm sand */
+    --band-ctx-2:   #c98a3a;   /* 200–500K — mid amber-orange */
+    --band-ctx-3:   #9a4530;   /* 500–800K — burnt sienna */
+    --band-ctx-4:   #5c1f18;   /* ≥800K    — deep mahogany */
+    --band-sonnet:  #7c5cad;   /* Sonnet   — cool purple (model family distinct) */
+    --band-haiku:   #3a7aa8;   /* Haiku    — teal-blue  (model family distinct) */
+    --dir-good:     #4aad7c;   /* directional: positive / better */
+    --dir-bad:      #cf4f3c;   /* directional: negative / worse  */
     --warn:         #d4a34d;
     --accent:       var(--warn);
     --crit:         #d66060;
@@ -113,8 +125,17 @@
     --body-texture:   none;
 
     --model-opus:   #b24a1e;
+    --model-fable:  #b93f64;
     --model-sonnet: #2d7d58;
     --model-haiku:  #3a6ba6;
+    --band-ctx-1:   #e8d5a3;
+    --band-ctx-2:   #c98a3a;
+    --band-ctx-3:   #9a4530;
+    --band-ctx-4:   #5c1f18;
+    --band-sonnet:  #7c5cad;
+    --band-haiku:   #3a7aa8;
+    --dir-good:     #4aad7c;
+    --dir-bad:      #cf4f3c;
     --warn:         #9c6a1e;
     --crit:         #b03a3a;
     --calm:         #1f8478;
@@ -325,7 +346,7 @@
     top: -2px;
   }
   .brand-deck {
-    font-family: var(--body, 'Satoshi', system-ui, sans-serif);
+    font-family: var(--body);
     font-size: var(--fs-base);
     line-height: 1.3;
     color: var(--ink-muted);
@@ -349,7 +370,7 @@
      down anymore. Anchored to the pill on desktop, full-width overlay
      on mobile. */
   .method-note {
-    font-family: var(--body, 'Satoshi', system-ui, sans-serif);
+    font-family: var(--body);
     font-size: var(--fs-base);
     margin: 0;
     position: relative;
@@ -419,7 +440,7 @@
   /* Per-section guidance — small "what this shows / how to reduce"
      collapsed explainer next to each section label. */
   .chart-help {
-    font-family: var(--body, 'Satoshi', system-ui, sans-serif);
+    font-family: var(--body);
     font-size: var(--fs-base);
     margin-top: 6px;
     margin-bottom: 12px;
@@ -815,36 +836,27 @@
   @media (max-width: 900px)  {
     .pacing-pair { flex-direction: column; gap: 16px; }
   }
-  /* Phone: pacing cards stay in a horizontal row, swipeable.
-     Overrides the column stacking introduced at 900px. Each card fills
-     the full visible width — adjacent cards reached via swipe + dots. */
+  /* Phone: stack pacing cards vertically. The earlier horizontal carousel
+     pushed documentElement.scrollWidth beyond the viewport, which breaks
+     the site-wide mobile no-overflow gate. */
   @media (max-width: 720px) {
     .pacing-pair {
-      flex-direction: row !important;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
+      flex-direction: column !important;
+      overflow-x: clip;
+      scroll-snap-type: none;
       scrollbar-width: none;
-      gap: 0;
+      gap: 12px;
       padding-left: 0;
       padding-right: 0;
       position: relative;
     }
     .pacing-pair::-webkit-scrollbar { display: none; }
     .pacing-pair .pacing-card {
-      flex: 0 0 100%;
-      scroll-snap-align: start;
-      scroll-snap-stop: always;
+      flex: 0 1 auto;
+      scroll-snap-align: none;
+      width: 100%;
     }
-    /* Pacing-pair dots — pagination indicator below the scroll row.
-       Slightly more prominent than before (8px) so they read as a
-       visible swipe affordance on the very first card. */
-    .pacing-scroll-dots {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 10px;
-    }
+    .pacing-scroll-dots { display: none; }
     .pacing-scroll-dot {
       width: 8px;
       height: 8px;
@@ -859,17 +871,7 @@
        first interaction. Cue is subtle (3 fade-in/out beats), not
        persistent UI noise. */
     .pacing-pair[data-swiped="false"]::after {
-      content: '›';
-      position: absolute;
-      right: 6px;
-      top: 50%;
-      transform: translateY(-50%);
-      font: 700 28px/1 var(--mono);
-      color: var(--ink-dim);
-      pointer-events: none;
-      animation: pacing-swipe-hint 1.6s ease-in-out 3;
-      animation-fill-mode: forwards;
-      opacity: 0;
+      content: none;
     }
     @keyframes pacing-swipe-hint {
       0%, 100% { opacity: 0; transform: translate(0, -50%); }
@@ -1004,7 +1006,7 @@
     align-self: center;
   }
   /* Pacing card header — matches the new lever-card header pattern:
-     title in Satoshi 15px/700, divider below, chrome (live badge +
+     title in Inter Tight 15px/700, divider below, chrome (live badge +
      unit toggle) sits to the right. */
   .pacing-head {
     display: flex;
@@ -1017,7 +1019,7 @@
     flex-wrap: wrap;
   }
   .pacing-label {
-    font: 700 13px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 700 13px/1.25 var(--sans);
     letter-spacing: -0.005em;
     color: var(--ink);
     text-transform: none;
@@ -1071,25 +1073,30 @@
     background: rgba(0, 0, 0, 0.05);
   }
   .sessions-range-toggle button {
+    appearance: none;
     font-family: var(--mono);
-    font-size: var(--fs-sm);
-    text-transform: lowercase;
-    letter-spacing: 0.04em;
-    padding: 3px 10px;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 12px;
     background: transparent;
-    color: var(--ink-dim);
+    color: var(--ink-muted);
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    min-height: 22px;
+    opacity: 0.65;
+    min-height: 26px;
     min-width: 32px;
     transition: all 120ms ease;
   }
-  .sessions-range-toggle button:hover { color: var(--ink-muted); }
+  .sessions-range-toggle button:hover { color: var(--ink); opacity: 1; }
   .sessions-range-toggle button.active {
     color: var(--ink);
     background: var(--surface);
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    opacity: 1;
   }
 
   /* Match pacing-card header chrome so the divider lines up with the
@@ -1614,8 +1621,8 @@
     .trends-section > .trends-head { padding-left: 10px; padding-right: 10px; }
   }
   .trends-kpi-block {
-    margin-bottom: 8px;
-    padding: 0 12px 6px;
+    margin-bottom: 6px;
+    padding: 0 12px 4px;
     border-bottom: 1px solid var(--pane-divider);
   }
   .trends-kpi-head {
@@ -1627,7 +1634,7 @@
     margin-bottom: 6px;
   }
   .trends-kpi-title {
-    font: 700 15px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 700 15px/1.25 var(--sans);
     letter-spacing: -0.005em;
     color: var(--ink);
     margin: 0;
@@ -1636,19 +1643,28 @@
     font-family: var(--mono);
     font-size: var(--fs-sm);
     color: var(--ink-dim);
-    line-height: 1.45;
+    line-height: 1.35;
     margin: 0;
-    max-width: 72ch;
+    max-width: none;
   }
-  /* Note + toggle on one row — toggle right-aligned, vertically centered
-     against the (multi-line) note. No dedicated toolbar row, no dead gap
-     above the KPI strip. (Round-2 Issue 3.) */
   .trends-kpi-toolbar {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-end;
     gap: 16px;
-    margin: 0 0 10px 0;
+    margin: 6px 0 0;
+  }
+  .trends-kpi-tip {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    line-height: 1.2;
+    color: var(--ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .strip-mode-toggle {
     display: inline-flex;
@@ -1682,22 +1698,16 @@
     background: var(--surface);
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
-  .trends-slider-hint {
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    color: var(--ink-dim);
-    line-height: 1.45;
-    margin: 8px 4px 0;
-    max-width: 72ch;
-  }
-  .trends-slider-hint kbd {
-    font-family: var(--mono);
-    font-size: var(--fs-xs);
-    padding: 1px 5px;
-    border-radius: 3px;
-    border: 1px solid var(--border-accent);
-    background: var(--tint-weak);
-    color: var(--ink-muted);
+  @media (max-width: 720px) {
+    .trends-kpi-toolbar {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+    }
+    .trends-kpi-tip {
+      flex-basis: 100%;
+      white-space: normal;
+    }
   }
   .trends-head {
     display: flex;
@@ -1712,7 +1722,7 @@
     margin-top: 4px;
   }
   .trends-head h2 {
-    font: 700 15px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 700 15px/1.25 var(--sans);
     letter-spacing: -0.005em;
     color: var(--ink);
     margin: 0;
@@ -1731,7 +1741,9 @@
      text. */
   .metric-strip {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    /* Column count must match the tile count — a mismatch wraps the extra
+       tile onto a full-height second row that steals trends-chart space. */
+    grid-template-columns: repeat(7, 1fr);
     gap: 0;
     margin: 8px 0 14px;
     border-top: 1px solid var(--tint-strong);
@@ -1797,10 +1809,11 @@
        transparent until the tile becomes active. */
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
-    padding: 10px 12px 12px;
+    /* 7-up strip: horizontal padding kept lean so BAN values don't truncate. */
+    padding: 10px 6px 12px;
     cursor: pointer;
     color: var(--ink-muted);
-    transition: color 120ms, border-color 120ms, background 120ms;
+    transition: color 120ms, border-color 120ms, background 120ms, box-shadow 120ms, transform 120ms;
     min-width: 0;
     overflow: hidden;
   }
@@ -1823,15 +1836,18 @@
     color: var(--ink);
     border-bottom-color: color-mix(in srgb, var(--tile-color) 60%, transparent);
     background: color-mix(in srgb, var(--tile-color) 4%, transparent);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25), inset 0 1px 0 color-mix(in srgb, var(--tile-color) 20%, transparent);
+    transform: translateY(-1px);
   }
   .metric-tile.active {
     color: var(--ink);
     border-bottom-color: var(--tile-color);
     background: color-mix(in srgb, var(--tile-color) 10%, transparent);
+    box-shadow: inset 3px 0 0 var(--tile-color), 0 2px 6px rgba(0,0,0,0.2);
   }
   .metric-tile-label {
-    font: 500 11px/1.1 var(--mono);
-    letter-spacing: 0.06em;
+    font: 500 10px/1.1 var(--mono);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--ink-muted);
     white-space: nowrap;
@@ -1850,13 +1866,13 @@
   .metric-tile-mid {
     display: flex;
     align-items: baseline;
-    gap: 5px;
+    gap: 4px;
     min-width: 0;
     overflow: hidden;
   }
   .metric-tile-value {
     display: block;
-    font: 700 20px/1.15 var(--mono);
+    font: 700 17px/1.15 var(--mono);
     font-variant-numeric: tabular-nums;
     color: var(--ink);
     letter-spacing: -0.01em;
@@ -1956,8 +1972,8 @@
     /* Shorter floor now that trends shares row 3 with heavy-turn card
        on the right. On wide screens the flex-grow still fills whatever
        space remains after header + pacing + metric strip. */
-    min-height: 200px;
-    flex: 1 1 auto;
+    min-height: 0;
+    flex: 1 1 0;
     touch-action: manipulation;
   }
   @media (max-width: 720px) { .trends-chart { min-height: 240px; flex: 0 0 auto; height: 240px; } }
@@ -2022,7 +2038,7 @@
   @media (max-width: 720px) {
     .lever-card { padding: 16px 18px; border-radius: 14px; }
   }
-  /* Card header — stronger hierarchy. Title in mixed-case Satoshi
+  /* Card header — stronger hierarchy. Title in mixed-case Inter Tight
      for quick reading; hint on the right in small mono. Clear bottom
      divider that reads as a proper header/content boundary. */
   .lever-card-label {
@@ -2035,7 +2051,7 @@
     flex-wrap: wrap;
   }
   .lever-card-label > span:first-child {
-    font: 700 15px/1.25 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 700 15px/1.25 var(--sans);
     color: var(--ink);
     letter-spacing: -0.005em;
     text-transform: none;
@@ -2055,20 +2071,41 @@
     font-weight: 400;
   }
 
-  /* Heavy-turn card uses a near-edge-to-edge plot (ribbon bars 20..980
-     in viewBox 1000; ECharts grid left/right ≈ 2% with containLabel). */
+  /* Heavy-turn card uses edge-aligned plots: ribbon bars span the full
+     viewBox and the ECharts grid keeps labels inside the chart area. */
   /* Pane-level shared color legend (P0) — one source of truth for ribbon
      + trend. Sits above both charts; mono swatches, ink-muted text. */
   .heavy-pane-legend {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 18px;
-    padding: 4px 0 8px;
-    font-family: var(--mono);
-    font-size: var(--fs-sm);
-    color: var(--ink-muted);
-    letter-spacing: 0.04em;
+    gap: 6px 14px;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--fs-xs);
+    color: var(--ink-dim);
+    padding: 0;
+    margin: 0;
+  }
+  .heavy-pane-toolbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px 18px;
+    padding: 6px 0 10px;
+    border-bottom: 1px solid var(--pane-divider);
+    margin-bottom: 8px;
+  }
+  .heavy-pane-controls {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 12px;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+  .heavy-pane-controls .trend-toggle-group {
+    align-items: flex-end;
   }
   .heavy-pane-legend-label {
     display: inline-flex;
@@ -2140,7 +2177,7 @@
     gap: 2px;
   }
   .composition-lead-num {
-    font: 500 14px/1.3 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 500 14px/1.3 var(--sans);
     color: var(--ink-muted);
     letter-spacing: -0.005em;
   }
@@ -2152,7 +2189,7 @@
     margin-right: 4px;
   }
   .composition-lead-sub {
-    font: 500 12px/1.4 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 500 12px/1.4 var(--sans);
     color: var(--ink-dim);
     max-width: 60ch;
   }
@@ -2160,7 +2197,7 @@
      legend so it reads as "for context" rather than the headline. */
   .composition-rate-note {
     margin-top: 4px;
-    font: 500 11px/1.4 var(--sans, 'Satoshi', system-ui, sans-serif);
+    font: 500 11px/1.4 var(--sans);
     color: var(--ink-dim);
     letter-spacing: 0;
   }
@@ -2193,9 +2230,10 @@
      mekko/trend row below it — they're all one visual unit. */
   /* Heavy-turn: equal-height ribbon / trend rows on wide desktop. */
   .heavy-visual-split {
+    --heavy-chart-width: 100%;
     display: grid;
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 10px;
+    gap: 12px;
     width: 100%;
     flex: 1 1 0;
     min-height: 0;
@@ -2279,6 +2317,26 @@
     flex-direction: column;
     gap: 6px;
   }
+  /* Unified panel title: all-caps mono label + optional declarative sub-headline.
+     Applied to all four quadrant headers for consistent chrome. */
+  .panel-title {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+    line-height: 1;
+  }
+  .panel-title-sub {
+    font-family: var(--sans);
+    font-size: var(--fs-sm);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
   @media (min-width: 1201px) {
     /* Title-only chrome — no min-height floor (was stretching legend away). */
     .heavy-panel-chrome--ribbon {
@@ -2296,6 +2354,16 @@
     flex: 1 1 0;
     min-height: 0;
     width: 100%;
+  }
+  .heavy-turn-card .heavy-visual-split #heavy-ribbon,
+  .heavy-turn-card .heavy-visual-split #heavy-trend {
+    box-sizing: border-box;
+    width: var(--heavy-chart-width, 100%);
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
   }
   .heavy-panel--ribbon .heavy-ribbon--stretch {
     display: flex;
@@ -2530,6 +2598,9 @@
     flex-wrap: wrap;
     justify-content: flex-start;
     row-gap: 8px;
+    /* Hug content — parent column stretches children, which made the tour
+       spotlight (and any rect measurement) span the full panel width. */
+    align-self: flex-start;
   }
   @media (max-width: 720px) {
     /* Single-row layout on phones: hide group labels (Metric / Scale /
@@ -2537,13 +2608,27 @@
        button colors still encode which option is selected. */
     .heavy-trend-toggles {
       gap: 4px;
-      flex-wrap: nowrap;
-      row-gap: 0;
+      flex-wrap: wrap;
+      row-gap: 6px;
       width: 100%;
-      justify-content: space-between;
+      justify-content: flex-start;
     }
     .heavy-trend-toggles .trend-toggle-group-label { display: none; }
     .heavy-trend-toggles .trend-toggle-group { gap: 0; min-width: 0; }
+    .heavy-pane-toolbar {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .heavy-pane-legend,
+    .heavy-pane-controls {
+      flex: 1 1 100%;
+    }
+    .heavy-pane-controls {
+      justify-content: flex-start;
+      gap: 6px;
+    }
+    .heavy-pane-controls .trend-toggle-group-label { display: none; }
+    .heavy-pane-controls .trend-toggle-group { gap: 0; min-width: 0; }
     .trend-toggle { padding: 1px; }
     .trend-toggle button {
       padding: 4px 5px;
@@ -2684,32 +2769,29 @@
     white-space: nowrap;
     text-overflow: clip;
   }
-  /* Dark-red segment needs white text for contrast (the other segments
-     all have light-enough fills for near-black to read cleanly). */
+  .eff-mix-bar > span.seg-opus-u200k {
+    color: rgba(0, 0, 0, 0.78);   /* dark text on pale sand */
+  }
+  .eff-mix-bar > span.seg-opus-200-500k {
+    color: rgba(0, 0, 0, 0.75);   /* dark text on amber */
+  }
   .eff-mix-bar > span.seg-opus-500-800k,
   .eff-mix-bar > span.seg-opus-o800k {
-    color: rgba(255, 255, 255, 0.92);
+    color: rgba(255, 255, 255, 0.92);  /* white text on dark bands */
   }
   /* Hide in-bar text automatically when the segment is too narrow —
      falls back to the legend below for identification. Threshold tuned
      so a label like "41%" needs ~30px. */
   .eff-mix-bar > span[data-label-hidden="1"] { font-size: 0; }
-  /* Opus tier bands — sequential warm palette (amber → orange → red →
-     deep red) chosen for clear perceptual steps. Still reads as "all
-     warm/Opus" family but each band is distinguishable at a glance.
-     Palette anchored on our existing tokens: --warn (amber),
-     --model-opus (orange), --crit (red). Deepest band uses a dark red
-     that doesn't exist elsewhere in the system, signalling "this is
-     where the premium bites hardest." */
   /* Ctx-tier palette — must stay in lockstep with CTX_TIER_COLORS in
      JS. The same tier reads the same color in the mekko, the evolution
      chart, and this mix bar. */
-  .eff-mix-bar .seg-opus-u200k    { background: #4a8a7e; }  /* teal — <200K */
-  .eff-mix-bar .seg-opus-200-500k { background: #e4b86a; }  /* amber — 200–500K */
-  .eff-mix-bar .seg-opus-500-800k { background: #cf4f3c; }  /* red-orange — 500–800K */
-  .eff-mix-bar .seg-opus-o800k    { background: #8e2626; }  /* deep red — ≥800K */
-  .eff-mix-bar .seg-sonnet { background: var(--model-sonnet); }
-  .eff-mix-bar .seg-haiku  { background: var(--model-haiku); }
+  .eff-mix-bar .seg-opus-u200k    { background: var(--band-ctx-1); }  /* <200K — pale sand */
+  .eff-mix-bar .seg-opus-200-500k { background: var(--band-ctx-2); }  /* 200–500K — amber */
+  .eff-mix-bar .seg-opus-500-800k { background: var(--band-ctx-3); }  /* 500–800K — sienna */
+  .eff-mix-bar .seg-opus-o800k    { background: var(--band-ctx-4); }  /* ≥800K — mahogany */
+  .eff-mix-bar .seg-sonnet { background: var(--band-sonnet); }
+  .eff-mix-bar .seg-haiku  { background: var(--band-haiku); }
   /* Legacy solid-opus class kept in case referenced elsewhere. */
   .eff-mix-bar .seg-opus   { background: var(--model-opus); }
   .eff-mix-legend {
@@ -2737,12 +2819,12 @@
   }
   /* Legend swatches share the bar-segment palette so there's no
      perceptual drift between bar band and legend chip. */
-  .legend-swatch.seg-opus-u200k    { background: #4a8a7e; }
-  .legend-swatch.seg-opus-200-500k { background: #e4b86a; }
-  .legend-swatch.seg-opus-500-800k { background: #cf4f3c; }
-  .legend-swatch.seg-opus-o800k    { background: #8e2626; }
-  .legend-swatch.seg-sonnet { background: var(--model-sonnet); }
-  .legend-swatch.seg-haiku  { background: var(--model-haiku); }
+  .legend-swatch.seg-opus-u200k    { background: var(--band-ctx-1); }
+  .legend-swatch.seg-opus-200-500k { background: var(--band-ctx-2); }
+  .legend-swatch.seg-opus-500-800k { background: var(--band-ctx-3); }
+  .legend-swatch.seg-opus-o800k    { background: var(--band-ctx-4); }
+  .legend-swatch.seg-sonnet { background: var(--band-sonnet); }
+  .legend-swatch.seg-haiku  { background: var(--band-haiku); }
 
   .eff-lever-list {
     display: flex;
@@ -2780,7 +2862,7 @@
   .eff-lever-label {
     font-size: var(--fs-base);
     color: var(--ink);
-    font-family: var(--body, 'Satoshi', system-ui, sans-serif);
+    font-family: var(--body);
     font-weight: 500;
     letter-spacing: 0.01em;
   }
@@ -2918,6 +3000,7 @@
   .session-table td.sid { color: var(--ink-muted); font-size: var(--fs-sm); letter-spacing: 0.02em; }
   .session-table td.model { text-transform: uppercase; font-size: var(--fs-sm); letter-spacing: 0.08em; }
   .session-table td.model.opus   { color: var(--model-opus); }
+  .session-table td.model.fable  { color: var(--model-fable); }
   .session-table td.model.sonnet { color: var(--model-sonnet); }
   .session-table td.model.haiku  { color: var(--model-haiku); }
   .session-table td.ago { color: var(--ink-dim); font-size: var(--fs-sm); }
@@ -3164,13 +3247,33 @@
       <div class="heavy-visual-split">
         <div class="heavy-panel heavy-panel--ribbon">
           <div class="heavy-panel-chrome heavy-panel-chrome--ribbon">
-            <div id="heavy-ribbon-headline" style="font-size: 14px; font-weight: 600; color: var(--ink); text-transform: none; padding-bottom: 8px;">Token vs turn imbalance · last 7 days</div>
+            <div id="heavy-ribbon-headline" style="font-size: 14px; font-weight: 600; color: var(--ink); text-transform: none; padding-bottom: 8px;">Token vs turn imbalance · last 90 days</div>
             <!-- Pane-level color key: one legend serves both ribbon + trend.
                  Order low → high context to match stack/segment order. Lives
                  inside the ribbon chrome (no longer above the visual split)
                  so we can drop the inline SVG legend on top of the ribbon
                  SVG — only one legend, in the lower of the two old slots. -->
-            <div class="heavy-pane-legend" id="heavy-pane-legend" aria-label="Context bands"></div>
+            <div class="heavy-pane-toolbar">
+              <div class="heavy-pane-legend" id="heavy-pane-legend" aria-label="Context bands"></div>
+              <div class="heavy-pane-controls" aria-label="Heavy chart scope controls">
+                <div class="trend-toggle-group">
+                  <span class="trend-toggle-group-label">Range</span>
+                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend range">
+                    <button type="button" data-trend-range="7">7d</button>
+                    <button type="button" data-trend-range="30">30d</button>
+                    <button type="button" data-trend-range="90" class="active">90d</button>
+                    <button type="button" data-trend-range="all">All</button>
+                  </div>
+                </div>
+                <div class="trend-toggle-group">
+                  <span class="trend-toggle-group-label">Group</span>
+                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend group">
+                    <button type="button" data-trend-group="bands" class="active">Bands</button>
+                    <button type="button" data-trend-group="headless">Headless</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="heavy-ribbon heavy-ribbon--stretch" id="heavy-ribbon" role="img" aria-label="Token vs turn imbalance ribbon — context band breakdown"></div>
         </div>
@@ -3181,30 +3284,21 @@
               <div class="heavy-trend-toggles">
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Metric</span>
-                  <div class="trend-toggle" role="tablist" aria-label="Trend metric">
+                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend metric">
                     <button type="button" data-trend-metric="tokens" class="active">Tokens</button>
                     <button type="button" data-trend-metric="turns">Turns</button>
                   </div>
                 </div>
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Scale</span>
-                  <div class="trend-toggle" role="tablist" aria-label="Trend scale">
+                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend scale">
                     <button type="button" data-trend-scale="share" class="active">Share</button>
                     <button type="button" data-trend-scale="level">Level</button>
                   </div>
                 </div>
-                <div class="trend-toggle-group">
-                  <span class="trend-toggle-group-label">Range</span>
-                  <div class="trend-toggle" role="tablist" aria-label="Trend range">
-                    <button type="button" data-trend-range="7">7d</button>
-                    <button type="button" data-trend-range="30">30d</button>
-                    <button type="button" data-trend-range="90" class="active">90d</button>
-                    <button type="button" data-trend-range="all">All</button>
-                  </div>
-                </div>
               </div>
             </div>
-            <div class="heavy-trend" id="heavy-trend" role="img" aria-label="Heavy-turn evolution stacked area chart — last 7 days"></div>
+            <div class="heavy-trend" id="heavy-trend" role="img" aria-label="Heavy-turn evolution stacked area chart — selected range"></div>
           </div>
         </div>
       </div>
@@ -3287,13 +3381,14 @@
       <div class="trends-kpi-head">
         <h2 class="trends-kpi-title">At a glance</h2>
       </div>
-      <!-- Note + toggle share ONE row: note on the left, toggle right-
-           aligned. The toggle stays scoped to the KPI strip (sits just
-           above it) but costs no extra vertical space — no dead gap
-           between the description and the tiles.
-           (Round-2 Issue 3 — bead analytics-workspace-2ks, 2026-05-15.) -->
+      <!-- Description owns the full pane width; the interaction tip shares
+           the bottom row with the comparison toggle directly above the KPI
+           strip.
+           (Round-2 Issue 3 — bead analytics-workspace-2ks, 2026-05-15;
+           synced from standalone canonical template 2026-06-04.) -->
+      <p class="trends-kpi-note" id="trends-kpi-note">Most recent 7 days vs the 7 days before that, sorted by direction of change — worse on the left, better on the right.</p>
       <div class="trends-kpi-toolbar">
-        <p class="trends-kpi-note" id="trends-kpi-note">Tiles compare the most recent 7 days to the 7 days before that, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart.</p>
+        <p class="trends-kpi-tip">Tap a tile to plot that metric in the chart below.</p>
         <div class="strip-mode-toggle" role="tablist" aria-label="KPI comparison window">
           <button type="button" data-strip-mode="7v7" class="active" role="tab" aria-selected="true">7d vs prior 7d</button>
           <button type="button" data-strip-mode="24v7" role="tab" aria-selected="false">24h vs prior 7d</button>
@@ -3316,7 +3411,7 @@
           <summary aria-label="What this shows">Info</summary>
           <div class="chart-help-body">
             <p><strong>What it shows:</strong> the chart is daily or weekly aggregates over your lookback. The strip above is a quick read on current pace: either 7-day averages vs the week before, or a rolling 24-hour snapshot vs the same prior-week daily baseline.</p>
-            <p><strong>Reading the trend:</strong> bars show individual days (or weeks, if you toggle Week); the line is a smoothed running average. The two dashed markers point to capability events (1M context turning on, Opus 4.7 launching) — useful anchors for where habits often shift.</p>
+            <p><strong>Reading the trend:</strong> bars show individual days (or weeks, if you toggle Week); the line is a smoothed running average. Dashed markers point to capability events (1M context turning on, Opus launches, Fable 5 launching) — useful anchors for where habits often shift.</p>
           </div>
         </details>
         <details class="chart-help chart-help--inline">
@@ -3327,14 +3422,13 @@
               <li><strong>avg ctx, cost/turn</strong> — <code>/compact</code> more often, <code>Grep</code> before <code>Read</code>, hand research to sub-agents so their context doesn't pile onto yours.</li>
               <li><strong>cost/day, turns/day</strong> — batch related questions into one prompt; move mechanical work from Opus to Sonnet.</li>
               <li><strong>cache hit %</strong> — above 85% is healthy; below 70% means the session keeps reshaping context each turn.</li>
-              <li><strong>opus share</strong> — over 70% is expensive. Sonnet is about 5× cheaper per token for mechanical work at similar quality.</li>
+              <li><strong>frontier share</strong> — Opus/Fable over 70% is expensive. Sonnet is cheaper per token for mechanical work at similar quality.</li>
             </ul>
           </div>
         </details>
       </div>
     </div>
     <div class="trends-chart" id="trends" data-polish="trends-chart" role="img" aria-label="Historical daily token usage trends"></div>
-    <p class="trends-slider-hint">Tip: drag the range bar under the chart to zoom the x-axis, or hold <kbd>Ctrl</kbd> / <kbd>⌘</kbd> and scroll inside the chart.</p>
   </div>
 
   <div class="footer">
@@ -3389,6 +3483,7 @@
       .getPropertyValue(name).trim();
     return v || fallback;
   };
+  const COLOR_FABLE = cssVar('--model-fable', '#e8547a');
   const T = {
     ink:       cssVar('--ink',           '#f0ede6'),
     inkMuted:  cssVar('--ink-muted',     '#b5b0a9'),
@@ -3400,6 +3495,7 @@
     bg:        cssVar('--bg',            '#0e0d13'),
     bgTooltip: cssVar('--tooltip-bg',    'rgba(14,13,19,0.95)'),
     opus:      cssVar('--model-opus',    '#e26a3f'),
+    fable:     COLOR_FABLE,
     sonnet:    cssVar('--model-sonnet',  '#82ad95'),
     haiku:     cssVar('--model-haiku',   '#6b8ec4'),
     warn:      cssVar('--warn',          '#d4a34d'),
@@ -3704,6 +3800,34 @@
   // Anything 5h/7d-shaped on the dashboard sources from RL_MAX instead
   // (the snapshotted personal Max account). Monthly stays on RL_LIVE.
   let RL_MAX = DATA.rate_limits_max || null;
+
+  // ── Sample-data demo mode ────────────────────────────────────────────────
+  // The public demo has no live OAuth data and no ongoing session. This shim
+  // synthesizes an active above-pace 5h window anchored to now at page-load,
+  // so the pacing card always shows a compelling "burning above limit" state
+  // regardless of when the page is viewed. Six heavy-Opus synthetic turns are
+  // pushed into the turns array so the delta-chart arc renders correctly.
+  if (DATA.is_sample) {
+    const _CAP = 18;                          // typical Claude Max 5h cap ($)
+    const _anchor = now - FIVE_HRS / 2;       // window started 2.5h ago → 50% elapsed
+    const _end    = now + FIVE_HRS / 2;       // resets 2.5h from now
+    // Six turns summing to 72% of cap — above pace the whole window.
+    // Costs are fractions of _CAP; ctx fields are plausible heavy-Opus sizes.
+    [
+      { ts: _anchor +  8*60000, c: _CAP*0.09, in:  80000, out:1400, cr:      0, cw: 80000 },
+      { ts: _anchor + 22*60000, c: _CAP*0.13, in: 200000, out:2200, cr: 120000, cw: 80000 },
+      { ts: _anchor + 45*60000, c: _CAP*0.07, in:  50000, out: 900, cr:      0, cw: 50000 },
+      { ts: _anchor + 68*60000, c: _CAP*0.18, in: 500000, out:3200, cr: 300000, cw:200000 },
+      { ts: _anchor + 95*60000, c: _CAP*0.14, in: 350000, out:2800, cr: 250000, cw:100000 },
+      { ts: _anchor +130*60000, c: _CAP*0.11, in: 280000, out:2000, cr: 150000, cw:130000 },
+    ].forEach(t => turns.push(t));            // 9+13+7+18+14+11 = 72% ✓
+    RL_LIVE = {
+      is_sample: true, mode: 'windows',
+      five_hour: { utilization: 72, resets_at_ms: _end },
+    };
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   // Infer mode from baked data when the field is missing (pre-fix
   // serve.py won't emit it). Keeps initial render in the right mode
   // so we avoid a flash from weekly → monthly when the live fetch lands.
@@ -3845,6 +3969,14 @@
   renderLiveBadges();
   refreshPacingVisibility(RL_LIVE);
 
+  const ENABLE_LIVE_API = location.port === '8922' || new URLSearchParams(location.search).has('live-api');
+  function fetchLiveApi(path, options) {
+    if (!ENABLE_LIVE_API) return Promise.resolve(null);
+    return fetch(path, options)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null);
+  }
+
   // ── Viewport-safe popover positioning ─────────────────────────────────
   // The Info / Tips popovers (.method-body, .chart-help-body) anchor via
   // CSS left/right offsets that work for typical layouts but overflow the
@@ -3947,10 +4079,13 @@
   // Fire-and-forget refresh from the local dev server. When it lands we
   // swap the RL_LIVE constants and re-render the pacing cards so the
   // reset anchors reflect current ground truth (no full page reload).
-  fetch('/api/rate-limits', { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
+  fetchLiveApi('/api/rate-limits', { cache: 'no-store' })
     .then(fresh => {
       if (!fresh || fresh.error) return;
+      // Sample demo mode: ignore live fetch — it would overwrite the synthetic
+      // above-pace state with real account data (a problem on local dev servers
+      // that serve /api/rate-limits; the public static site has no endpoint).
+      if (DATA.is_sample) return;
       RL_LIVE = fresh;
       // If the live endpoint pre-dates the mode field (old server),
       // infer mode from the data rather than clobbering the baked-in value.
@@ -3973,10 +4108,10 @@
   // Parallel fetch for the secondary (Max) account. Same fire-and-forget
   // pattern. This is what populates 5h/7d on enterprise/monthly accounts —
   // the keychain's primary OAuth token has those fields null.
-  fetch('/api/rate-limits-max', { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
+  fetchLiveApi('/api/rate-limits-max', { cache: 'no-store' })
     .then(fresh => {
       if (!fresh || fresh.error) return;
+      if (DATA.is_sample) return;  // sample mode: ignore live fetch
       RL_MAX = fresh;
       wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || wkResetMsLive;
       h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || h5ResetMsLive;
@@ -3990,8 +4125,7 @@
   // the "% used" headline stays accurate without a full page regen.
   // Only updates when the anchor matches (same window) or is newer
   // (window rolled over since page generation).
-  fetch('/api/pacing', { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
+  fetchLiveApi('/api/pacing', { cache: 'no-store' })
     .then(freshPacing => {
       if (!freshPacing || freshPacing.error || !freshPacing.five_hour) return;
       const fp = freshPacing.five_hour;
@@ -4754,21 +4888,9 @@
   }
 
   const WINDOW_DAYS = 7;  // BAN comparison window size
-  // Drop the trailing incomplete (partial) current day so the rolling
-  // averages used by the KPI tiles match the LAST COMPLETE day on the
-  // 7-day rolling line in the chart below. Without this, today's partial
-  // numbers pull the average down and create an apparent mismatch
-  // between the KPI value and the line on the chart.
-  // (Bug fix 2026-05-14 — bead analytics-workspace-2ks Feature 3.)
-  const _todayPT = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date());
-  const _lastDayIsToday = daily.length > 0 && daily[daily.length - 1].day === _todayPT;
-  const _completeDaily = _lastDayIsToday ? daily.slice(0, -1) : daily;
-  const recent = _completeDaily.slice(-WINDOW_DAYS);
-  const prior  = _completeDaily.slice(-2*WINDOW_DAYS, -WINDOW_DAYS);
-  const sparkDays = _completeDaily.slice(-3*WINDOW_DAYS);  // 21 days for the inline sparkline
+  const recent = daily.slice(-WINDOW_DAYS);
+  const prior  = daily.slice(-2*WINDOW_DAYS, -WINDOW_DAYS);
+  const sparkDays = daily.slice(-3*WINDOW_DAYS);  // 21 days for the inline sparkline
 
   function delta(r, p) {
     if (!p) return null;
@@ -4778,8 +4900,8 @@
   /** Aggregate assistant turns in [t0, t1] (ms, inclusive). */
   function aggregateTurnsRange(t0, t1, rows) {
     const o = {
-      turns: 0, cost: 0, tokens: 0, input: 0, output: 0, cr: 0, cw: 0,
-      opus: 0, sonnet: 0, haiku: 0, ctxSum: 0,
+      turns: 0, cost: 0, tokens: 0, tokens_headless: 0, input: 0, output: 0, cr: 0, cw: 0,
+      opus: 0, fable: 0, sonnet: 0, haiku: 0, ctxSum: 0,
     };
     for (const t of rows) {
       if (t.ts < t0 || t.ts > t1) continue;
@@ -4787,6 +4909,9 @@
       o.cost += t.c || 0;
       const tin = t.in || 0, tout = t.out || 0, tcr = t.cr || 0, tcw = t.cw || 0;
       o.tokens += tin + tout + tcr + tcw;
+      // Serialized turns carry stype under key "t" — they have no
+      // tokens_headless field, so derive it from the turn's own tokens.
+      o.tokens_headless += (t.t === 'headless') ? (tin + tout + tcr + tcw) : 0;
       o.input += tin;
       o.output += tout;
       o.cr += tcr;
@@ -4794,6 +4919,7 @@
       o.ctxSum += (t.ctx != null ? t.ctx : (tin + tcr + tcw));
       const m = t.m || '';
       if (m === 'opus') o.opus += 1;
+      else if (m === 'fable') o.fable += 1;
       else if (m === 'sonnet') o.sonnet += 1;
       else if (m === 'haiku') o.haiku += 1;
     }
@@ -4802,8 +4928,8 @@
     o.cost_per_turn = o.turns ? o.cost / o.turns : 0;
     o.avg_ctx = o.turns ? o.ctxSum / o.turns : 0;
     o.cache_hit_rate = inps ? o.cr / inps : 0;
-    const om = o.opus + o.sonnet + o.haiku;
-    o.opus_share = om ? o.opus / om : 0;
+    const om = o.opus + o.fable + o.sonnet + o.haiku;
+    o.opus_share = om ? (o.opus + o.fable) / om : 0;
     return o;
   }
 
@@ -4826,7 +4952,7 @@
           baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
         { id: 'cost_per_turn', metric: 'cost_per_turn', label: 'cost / turn',
           value: avg(recent, 'cost_per_turn'), prior: avg(prior, 'cost_per_turn'),
-          fmt: v => '$' + v.toFixed(3), deltaDir: 'up',
+          fmt: v => '$' + (v < 0.01 ? v.toFixed(3) : v.toFixed(2)), deltaDir: 'up',
           baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
         { id: 'avg_ctx', metric: 'avg_ctx', label: 'avg ctx',
           value: avg(recent, 'avg_ctx'), prior: avg(prior, 'avg_ctx'),
@@ -4836,16 +4962,27 @@
           value: avg(recent, 'cache_hit_rate'), prior: avg(prior, 'cache_hit_rate'),
           fmt: v => (v * 100).toFixed(0) + '%', deltaDir: 'down',
           baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
-        { id: 'opus_share', metric: 'opus_share', label: 'opus share',
+        { id: 'opus_share', metric: 'opus_share', label: 'frontier',
           value: (() => {
-            const ot = sum(recent, 'opus'), st = sum(recent, 'sonnet'), ht = sum(recent, 'haiku');
-            return (ot + st + ht) ? ot / (ot + st + ht) : 0;
+            const ot = sum(recent, 'opus'), ft = sum(recent, 'fable'), st = sum(recent, 'sonnet'), ht = sum(recent, 'haiku');
+            return (ot + ft + st + ht) ? (ot + ft) / (ot + ft + st + ht) : 0;
           })(),
           prior: (() => {
-            const ot = sum(prior, 'opus'), st = sum(prior, 'sonnet'), ht = sum(prior, 'haiku');
-            return (ot + st + ht) ? ot / (ot + st + ht) : 0;
+            const ot = sum(prior, 'opus'), ft = sum(prior, 'fable'), st = sum(prior, 'sonnet'), ht = sum(prior, 'haiku');
+            return (ot + ft + st + ht) ? (ot + ft) / (ot + ft + st + ht) : 0;
           })(),
           fmt: v => (v * 100).toFixed(0) + '%', deltaDir: 'up',
+          baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
+        { id: 'headless_share', metric: 'headless_share', label: 'headless',
+          value: (() => {
+            const ht = sum(recent, 'tokens_headless'), tt = sum(recent, 'tokens');
+            return tt ? ht / tt : 0;
+          })(),
+          prior: (() => {
+            const ht = sum(prior, 'tokens_headless'), tt = sum(prior, 'tokens');
+            return tt ? ht / tt : 0;
+          })(),
+          fmt: v => (v * 100).toFixed(0) + '%', deltaDir: 'neutral',
           baselineShort: baselineShort7, baselineTitle: baselineTitle7 },
       ];
     }
@@ -4858,8 +4995,8 @@
     const pAvgCtx = avg(prior, 'avg_ctx');
     const pCache = avg(prior, 'cache_hit_rate');
     const pOpus = (() => {
-      const ot = sum(prior, 'opus'), st = sum(prior, 'sonnet'), ht = sum(prior, 'haiku');
-      return (ot + st + ht) ? ot / (ot + st + ht) : 0;
+      const ot = sum(prior, 'opus'), ft = sum(prior, 'fable'), st = sum(prior, 'sonnet'), ht = sum(prior, 'haiku');
+      return (ot + ft + st + ht) ? (ot + ft) / (ot + ft + st + ht) : 0;
     })();
     return [
       { id: 'turns', metric: 'turns', label: 'turns (24h)',
@@ -4872,7 +5009,7 @@
         baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
       { id: 'cost_per_turn', metric: 'cost_per_turn', label: 'cost / turn',
         value: r24.cost_per_turn, prior: pCpt,
-        fmt: v => '$' + v.toFixed(3), deltaDir: 'up',
+        fmt: v => '$' + (v < 0.01 ? v.toFixed(3) : v.toFixed(2)), deltaDir: 'up',
         baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
       { id: 'avg_ctx', metric: 'avg_ctx', label: 'avg ctx',
         value: r24.avg_ctx, prior: pAvgCtx,
@@ -4882,28 +5019,37 @@
         value: r24.cache_hit_rate, prior: pCache,
         fmt: v => (v * 100).toFixed(0) + '%', deltaDir: 'down',
         baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
-      { id: 'opus_share', metric: 'opus_share', label: 'opus share',
+      { id: 'opus_share', metric: 'opus_share', label: 'frontier',
         value: r24.opus_share, prior: pOpus,
         fmt: v => (v * 100).toFixed(0) + '%', deltaDir: 'up',
+        baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
+      { id: 'headless_share', metric: 'headless_share', label: 'headless',
+        value: (() => {
+          const ht = r24.tokens_headless || 0, tt = r24.tokens || 0;
+          return tt ? ht / tt : 0;
+        })(),
+        prior: (() => {
+          const ht = sum(prior, 'tokens_headless'), tt = sum(prior, 'tokens');
+          return tt ? ht / tt : 0;
+        })(),
+        fmt: v => (v * 100).toFixed(0) + '%', deltaDir: 'neutral',
         baselineShort: baselineShort24, baselineTitle: baselineTitle24 },
     ];
   }
 
-  // ── Context-tier palette shared across every chart that slices the
-  // token pool by ctx size. Tiers own the colors; a given ctx bucket
-  // reads the same color whether it appears in the mekko, the mix bar,
-  // or the evolution area chart. Cool teal = low ctx (efficient);
-  // warm ladder → deep red = heavy ctx (expensive).
+  // Ctx-tier palette — sequential warm ramp (light→deep with ctx size).
+  // Must stay in lockstep with CSS --band-ctx-* vars and RIBBON_COLORS.
   const CTX_TIER_COLORS = {
-    u200k:   '#4a8a7e',   // <200K
-    '200_500k': '#e4b86a', // 200–500K
-    '500_800k': '#cf4f3c', // 500–800K
-    o800k:   '#8e2626',   // ≥800K
+    u200k:     '#e8d5a3',   // <200K   — pale sand (CSS: --band-ctx-1)
+    '200_500k': '#c98a3a',  // 200–500K — amber    (CSS: --band-ctx-2)
+    '500_800k': '#9a4530',  // 500–800K — sienna   (CSS: --band-ctx-3)
+    o800k:     '#5c1f18',   // ≥800K   — mahogany  (CSS: --band-ctx-4)
   };
-  // Model palette — used for sonnet/haiku in the mix bar (opus lives
+  // Model palette — used for fable/sonnet/haiku in model-specific surfaces (opus lives
   // inside the ctx-tier palette above because opus cost is context-
   // driven).
   const MODEL_COLORS = {
+    fable: COLOR_FABLE,
     sonnet: '#82ad95',
     haiku:  '#6b8ec4',
   };
@@ -4916,14 +5062,15 @@
   //   cost/turn      — red-orange   (intensity + cost signal)
   //   avg ctx        — indigo       (cognitive load, distinct)
   //   cache hit      — teal/green   (efficiency · good)
-  //   opus share     — opus orange  (model-mix brand color)
+  //   frontier share — fable coral  (big-context model-mix signal)
   const METRIC_COLORS = {
     turns:           '#6b8ec4',
     cost:            '#d4a34d',
     cost_per_turn:   '#cf4f3c',
     avg_ctx:         '#b07df0',
     cache_hit_rate:  '#5cc4b5',
-    opus_share:      '#e26a3f',
+    opus_share:      COLOR_FABLE,
+    headless_share:  '#9a7bd4',
   };
 
   function renderMetricStrip() {
@@ -4944,8 +5091,8 @@
       if (dA == null && dB == null) return 0;
       if (dA == null) return 1;
       if (dB == null) return -1;
-      const scoreA = a.deltaDir === 'up' ? dA : -dA;
-      const scoreB = b.deltaDir === 'up' ? dB : -dB;
+      const scoreA = a.deltaDir === 'up' ? dA : a.deltaDir === 'neutral' ? 0 : -dA;
+      const scoreB = b.deltaDir === 'up' ? dB : b.deltaDir === 'neutral' ? 0 : -dB;
       return scoreB - scoreA;
     });
     rows.forEach(b => {
@@ -4955,8 +5102,9 @@
         // deltaDir 'up'   = higher value = bad  (warn/red)
         // deltaDir 'down' = higher value = good (green/teal)
         const isUp = d > 0;
-        if (b.deltaDir === 'up')   deltaClass = isUp ? 'up' : 'down';
-        else                        deltaClass = isUp ? 'down' : 'up';
+        if (b.deltaDir === 'neutral') { deltaClass = 'flat'; }
+        else if (b.deltaDir === 'up') deltaClass = isUp ? 'up' : 'down';
+        else                          deltaClass = isUp ? 'down' : 'up';
       }
       const tile = document.createElement('button');
       tile.type = 'button';
@@ -5035,8 +5183,8 @@
     const el = document.getElementById('trends-kpi-note');
     if (!el) return;
     el.textContent = stripCompareMode === '24v7'
-      ? 'Rolling last 24 hours vs the average daily level from the prior 7d, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart below.'
-      : 'Tiles compare the most recent 7 days to the 7 days before that, sorted by direction of change — worse on the left, better on the right. Tap a tile to plot that metric in the chart below.';
+      ? 'Rolling last 24 hours vs the average daily level from the prior 7d, sorted by direction of change — worse on the left, better on the right.'
+      : 'Most recent 7 days vs the 7 days before that, sorted by direction of change — worse on the left, better on the right.';
   }
 
   // Render the metric strip BEFORE the trends chart so the chart's
@@ -5060,10 +5208,14 @@
       cost:            { label: 'cost / day',    fmt: fmtUsd, line: METRIC_COLORS.cost, get: d => d.cost },
       avg_ctx:         { label: 'avg ctx',       fmt: fmtNum, line: METRIC_COLORS.avg_ctx, get: d => d.avg_ctx },
       cache_hit_rate:  { label: 'cache hit rate', fmt: v => (v*100).toFixed(0) + '%', line: METRIC_COLORS.cache_hit_rate, get: d => d.cache_hit_rate },
-      opus_share:      { label: 'opus share',    fmt: v => (v*100).toFixed(0) + '%', line: METRIC_COLORS.opus_share, get: d => {
-          const t = (d.opus || 0) + (d.sonnet || 0) + (d.haiku || 0);
-          return t ? d.opus / t : 0;
+      opus_share:      { label: 'frontier share', fmt: v => (v*100).toFixed(0) + '%', line: METRIC_COLORS.opus_share, get: d => {
+          const frontier = (d.opus || 0) + (d.fable || 0);
+          const t = frontier + (d.sonnet || 0) + (d.haiku || 0);
+          return t ? frontier / t : 0;
         } },
+      headless_share: { label: 'headless share', fmt: v => (v*100).toFixed(1) + '%',
+        line: '#9a7bd4',
+        get: d => { const tt = d.tokens || 0; const ht = d.tokens_headless || 0; return tt ? ht / tt : 0; } },
       turns:           { label: 'turns / day',   fmt: v => Math.round(v).toLocaleString(), line: METRIC_COLORS.turns, get: d => d.turns },
     };
 
@@ -5113,21 +5265,24 @@
           buckets.set(key, {
             day: mondayOfWeek(d.day),
             week: key,
-            turns: 0, cost: 0, tokens: 0,
+            turns: 0, cost: 0, tokens: 0, tokens_headless: 0, turns_headless: 0,
             input: 0, output: 0,
             cache_read: 0, cache_write: 0,
-            opus: 0, sonnet: 0, haiku: 0,
+            opus: 0, fable: 0, sonnet: 0, haiku: 0,
           });
         }
         const w = buckets.get(key);
         w.turns       += d.turns       || 0;
         w.cost        += d.cost        || 0;
         w.tokens      += d.tokens      || 0;
+        w.tokens_headless += d.tokens_headless || 0;
+        w.turns_headless  += d.turns_headless  || 0;
         w.input       += d.input       || 0;
         w.output      += d.output      || 0;
         w.cache_read  += d.cache_read  || 0;
         w.cache_write += d.cache_write || 0;
         w.opus        += d.opus        || 0;
+        w.fable       += d.fable       || 0;
         w.sonnet      += d.sonnet      || 0;
         w.haiku       += d.haiku       || 0;
       }
@@ -5150,20 +5305,22 @@
       timeZone: 'America/Los_Angeles',
       year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(new Date(ms));
-    // 1M context GA (Sonnet/Opus 4.6) shipped 2026-03-13 — public platform
-    // event, not the personal first-use anchor that DATA.first_1m_ms
-    // tracks. Using the GA date keeps the marker as a true platform anchor
-    // (~5 weeks before Opus 4.7), which is what readers expect.
-    const ONE_M_GA = '2026-03-13';
-    const todayPT = fmtPTDate(Date.now());
-    const firstOneMDay = todayPT >= ONE_M_GA ? ONE_M_GA : null;
+    let firstOneMDay = null;
+    if (DATA.first_1m_ms) {
+      firstOneMDay = fmtPTDate(DATA.first_1m_ms);
+    }
     // Opus 4.7 general availability: 2026-04-16.
     // Model releases on the trends chart let Keith see behavior changes
     // coinciding with each new model (context bump, capability shift).
     const OPUS_47_RELEASE = '2026-04-16';
+    const todayPT = fmtPTDate(Date.now());
     // Only show the Opus 4.7 marker if the data actually reaches that
     // date (it will for any regen after 2026-04-16).
     const showOpus47Marker = todayPT >= OPUS_47_RELEASE;
+    const OPUS_48_RELEASE = '2026-05-28';
+    const showOpus48Marker = todayPT >= OPUS_48_RELEASE;
+    const FABLE_5_RELEASE = '2026-06-09';
+    const showFable5Marker = todayPT >= FABLE_5_RELEASE;
 
     let currentMetric = 'avg_ctx';
     let currentGranularity = 'day';   // 'day' | 'week'
@@ -5191,32 +5348,12 @@
         }
         return out;
       })();
-      // Drop the final point from the rolling-average line when it
-      // represents an INCOMPLETE current day/week — that partial
-      // bucket drags the rolling average down and made the line
-      // disagree with the KPI tile (which now uses complete-day data).
-      // Keep the partial bucket as a BAR (raw value is still useful as
-      // a "today so far" indicator), just exclude it from the smoothed
-      // line. (Bug fix 2026-05-14 — bead analytics-workspace-2ks Feature 3.)
-      const _lastBucketDay = data.length ? data[data.length - 1][0] : null;
-      const _lastIsPartial = (currentGranularity === 'day')
-        ? (_lastBucketDay === todayPT)
-        : (_lastBucketDay && todayPT >= _lastBucketDay &&
-           // Week bucket starts on Monday; treat as partial if today is
-           // in that Mon→Sun span.
-           (new Date(todayPT + 'T12:00:00') - new Date(_lastBucketDay + 'T12:00:00')) < 7 * 86400000);
-      const rolling = rollingArr.map((v, i) => [data[i][0], v])
-        .filter((_, i) => !(_lastIsPartial && i === rollingArr.length - 1));
+      const rolling = rollingArr.map((v, i) => [data[i][0], v]);
       trendsChart.setOption({
         backgroundColor: 'transparent',
         animation: !REDUCED_MOTION,
         animationDuration: REDUCED_MOTION ? 0 : 400,
-        // aria.decal is OFF — when on, ECharts auto-decals EVERY series,
-        // which painted a dash pattern onto the rolling-avg line ("white
-        // dashes taking bites out of it"). The bar hatch is instead
-        // applied explicitly on the bar series' itemStyle.decal below, so
-        // the line stays clean. (Round-2 Issue 1 — bead analytics-workspace-2ks.)
-        aria: { enabled: true, decal: { show: false } },
+        aria: { enabled: true, decal: { show: true } },
         /* Chart body reaches the card edges — we reclaim the 18px of
            card-side padding + keep grid margins minimal. Left margin
            still holds y-axis labels (fmtNum output like "800k").
@@ -5224,10 +5361,7 @@
            handles + last bar's right edge. */
         grid: IS_MOBILE
           ? { left: 0, right: 0, top: 20, bottom: 56, containLabel: false }
-          // top:34 gives the markPoint callouts (bar max/min + rolling-avg
-          // most-recent) headroom so they don't clip the top edge when a
-          // tall bar reaches near the plot ceiling. (Round-2 Issue 2.)
-          : { left: 42, right: 6, top: 34, bottom: 56 },
+          : { left: 42, right: 6, top: 20, bottom: 56 },
         tooltip: {
           trigger: 'axis',
           confine: true,
@@ -5253,9 +5387,7 @@
               ? new Date(day + 'T12:00:00').toLocaleDateString('en-US',
                   { weekday: 'short', month: 'short', day: 'numeric' })
               : '';
-            // Date header uses T.ink (theme-aware) — was hardcoded #fff which
-            // rendered white-on-white in light mode (Bug fix 2026-05-14).
-            const lines = ['<div style="font-weight:700;color:' + T.ink + '">' + dayLabel + '</div>'];
+            const lines = ['<div style="font-weight:700;color:#fff">' + dayLabel + '</div>'];
             for (const p of params) {
               if (p.data[1] == null) continue;
               lines.push(p.marker + p.seriesName + ': <b>' + m.fmt(p.data[1]) + '</b>');
@@ -5264,9 +5396,10 @@
             if (row.turns != null) lines.push(dim('turns:') + ' ' + fmtNum(row.turns));
             if (row.cost != null)  lines.push(dim('cost:')  + ' ' + fmtUsd(row.cost));
             if (row.tokens != null) lines.push(dim('tokens:') + ' ' + fmtNum(row.tokens));
-            const o = row.opus || 0, so = row.sonnet || 0, ha = row.haiku || 0;
-            if (o + so + ha > 0) {
+            const o = row.opus || 0, f = row.fable || 0, so = row.sonnet || 0, ha = row.haiku || 0;
+            if (o + f + so + ha > 0) {
               lines.push(dim('mix:') + ' ' + dim('O') + ' ' + o +
+                         (f ? ' ' + dim('·') + ' ' + dim('F') + ' ' + f : '') +
                          ' ' + dim('·') + ' ' + dim('S') + ' ' + so +
                          (ha ? ' ' + dim('·') + ' ' + dim('H') + ' ' + ha : ''));
             }
@@ -5334,25 +5467,22 @@
         series: [
           { name: currentGranularity === 'week' ? 'weekly' : 'daily',
             type: 'bar', data: data,
-            // Diagonal hatch decal applied explicitly (chart-wide
-            // aria.decal is off so the rolling-avg line stays solid).
-            // Mirrors ECharts' default decal look the bars had before.
-            itemStyle: {
-              color: m.line + '55',
-              decal: {
-                symbol: 'rect', color: 'rgba(0,0,0,0.10)',
-                dashArrayX: [1, 0], dashArrayY: [2, 5],
-                rotation: -Math.PI / 4,
+            itemStyle: { color: m.line + '55' }, barWidth: '70%', z: 1,
+            label: {
+              show: true,
+              position: 'top',
+              formatter: p => {
+                const v = Array.isArray(p.value) ? p.value[1] : p.value;
+                if (v == null || Number.isNaN(v)) return '';
+                const isLast = p.dataIndex === data.length - 1;
+                const interval = currentGranularity === 'week' ? 1 : 7;
+                if (!isLast && p.dataIndex % interval !== 0) return '';
+                return m.fmt(v);
               },
+              color: T.inkMuted,
+              fontFamily: T.mono,
+              fontSize: 9,
             },
-            barWidth: '70%', z: 1,
-            // No per-bar data labels — ~60 daily bars is past the "21+ →
-            // no data labels" density floor. The every-7th-bar labels
-            // were the surface the rolling-avg line labels collided with
-            // (data-storytelling annotation-and-labeling.md §1.1, L1/L14).
-            // The bar markPoint below still calls out the max/min day.
-            // (Round-2 Issue 2 — bead analytics-workspace-2ks.)
-            label: { show: false },
             markPoint: IS_MOBILE ? undefined : {
               symbol: 'circle',
               symbolSize: 6,
@@ -5378,77 +5508,79 @@
           { name: (currentGranularity === 'week' ? '4-week' : '7-day') + ' rolling avg',
             type: 'line', data: rolling,
             showSymbol: false, smooth: false,
-            // SOLID line — chart-wide aria.decal is now off (it had been
-            // painting a dash decal onto the line). (Round-2 Issue 1.)
-            itemStyle: { color: m.line },
-            lineStyle: { color: m.line, width: 2.5, type: 'solid' }, z: 4,
-            // No per-point data labels. ~60 daily points is well past the
-            // "21+ → no data labels" density floor (data-storytelling
-            // annotation-and-labeling.md §1.1). The dense staggered run
-            // collided with bar labels and clipped at the chart edges.
-            // Instead: ONE intentional markPoint callout on the most
-            // recent rolling-avg value — the number that matches the KPI
-            // tile. (The global max is an artifact of the small early
-            // window, so it fails Test 1 "is this value important to the
-            // story" and is deliberately NOT labeled.)
-            // (Round-2 Issue 2 — bead analytics-workspace-2ks.)
-            label: { show: false },
-            markPoint: IS_MOBILE ? undefined : (() => {
-              const lastIdx = rolling.length - 1;
-              if (lastIdx < 0) return undefined;
-              const last = rolling[lastIdx];
-              return {
-                symbol: 'circle', symbolSize: 7,
-                itemStyle: { color: m.line, borderColor: T.bg, borderWidth: 1.5 },
-                data: [
-                  // Most-recent rolling-avg value = the KPI-tile number.
-                  // Callout opens LEFT so it never clips the right edge.
-                  { coord: [last[0], last[1]],
-                    label: {
-                      show: true, position: 'left', distance: 12,
-                      backgroundColor: m.line,
-                      color: '#ffffff', fontFamily: T.mono,
-                      fontSize: 11, fontWeight: 700,
-                      padding: [3, 7], borderRadius: 4,
-                      formatter: () => m.fmt(last[1]),
-                    } },
-                ],
-              };
-            })(),
+            lineStyle: { color: m.line, width: 2.5 }, z: 2,
             markLine: (() => {
+              // For weekly granularity, snap each marker date to its
+              // containing week bucket (largest week-start <= date).
+              // Mirrors the approach used in the heavy-trend chart.
+              const snapToGrain = (d) => {
+                if (!d) return null;
+                if (currentGranularity !== 'week') return d;
+                const src = currentGranularity === 'week' ? weekly : daily;
+                const xs = src.map(r => r.day);
+                if (!xs.length || d < xs[0]) return null;
+                let result = null;
+                for (const x of xs) { if (x <= d) result = x; else break; }
+                return result;
+              };
               const mlData = [
-                ...(firstOneMDay ? [{
-                  xAxis: firstOneMDay,
-                  lineStyle: { color: T.warn, width: 1.5, type: 'dashed' },
+                ...(firstOneMDay && snapToGrain(firstOneMDay) ? [{
+                  xAxis: snapToGrain(firstOneMDay),
+                  lineStyle: { color: T.warn, width: 1.2, type: 'dashed' },
                   label: {
+                    rotate: 0,
                     color: T.warn, fontFamily: T.mono,
-                    fontSize: IS_MOBILE ? 8 : 9, fontWeight: 700,
-                    position: 'insideEndBottom',
-                    distance: IS_MOBILE ? 2 : 6,
-                    formatter: IS_MOBILE ? '1M' : '1M context\nactivated',
+                    fontSize: 11, fontWeight: 700,
+                    position: 'end',
+                    formatter: IS_MOBILE ? '1M' : '1M ctx',
                     backgroundColor: T.bg,
-                    padding: IS_MOBILE ? [2, 4] : [3, 6],
-                    lineHeight: IS_MOBILE ? 10 : 12,
+                    padding: [3, 7], lineHeight: 13,
                     borderRadius: 3,
                   },
                 }] : []),
-                ...(showOpus47Marker ? [{
-                  xAxis: OPUS_47_RELEASE,
-                  lineStyle: { color: T.sonnet, width: 1.5, type: 'dashed' },
+                ...(showOpus47Marker && snapToGrain(OPUS_47_RELEASE) ? [{
+                  xAxis: snapToGrain(OPUS_47_RELEASE),
+                  lineStyle: { color: T.sonnet, width: 1.2, type: 'dashed' },
                   label: {
+                    rotate: 0,
                     color: T.sonnet, fontFamily: T.mono,
-                    fontSize: IS_MOBILE ? 8 : 9, fontWeight: 700,
-                    position: 'insideStartBottom',
-                    distance: IS_MOBILE ? 2 : 6,
-                    formatter: IS_MOBILE ? 'O4.7' : 'Opus 4.7\nreleased',
+                    fontSize: 11, fontWeight: 700,
+                    position: 'end',
+                    formatter: IS_MOBILE ? 'O4.7' : 'Opus 4.7',
                     backgroundColor: T.bg,
-                    padding: IS_MOBILE ? [2, 4] : [3, 6],
-                    lineHeight: IS_MOBILE ? 10 : 12,
+                    padding: [3, 7], lineHeight: 13,
                     borderRadius: 3,
                   },
                 }] : []),
-                // Threshold reference line: 80% cache hit rate (Pawel Huryn
-                // recommendation — below this, prompt caching is underused).
+                ...(showOpus48Marker && snapToGrain(OPUS_48_RELEASE) ? [{
+                  xAxis: snapToGrain(OPUS_48_RELEASE),
+                  lineStyle: { color: T.sonnet, width: 1.2, type: 'dashed' },
+                  label: {
+                    rotate: 0,
+                    color: T.sonnet, fontFamily: T.mono,
+                    fontSize: 11, fontWeight: 700,
+                    position: 'end',
+                    formatter: IS_MOBILE ? 'O4.8' : 'Opus 4.8',
+                    backgroundColor: T.bg,
+                    padding: [3, 7], lineHeight: 13,
+                    borderRadius: 3,
+                  },
+                }] : []),
+                ...(showFable5Marker && snapToGrain(FABLE_5_RELEASE) ? [{
+                  xAxis: snapToGrain(FABLE_5_RELEASE),
+                  lineStyle: { color: T.fable, width: 1.2, type: 'dashed' },
+                  label: {
+                    rotate: 0,
+                    color: T.fable, fontFamily: T.mono,
+                    fontSize: 11, fontWeight: 700,
+                    position: 'end',
+                    formatter: IS_MOBILE ? 'F5' : 'Fable 5',
+                    backgroundColor: T.bg,
+                    padding: [3, 7], lineHeight: 13,
+                    borderRadius: 3,
+                  },
+                }] : []),
+                // Threshold reference line: 80% cache hit rate
                 ...(currentMetric === 'cache_hit_rate' ? [{
                   yAxis: 0.80,
                   lineStyle: { color: '#5cc4b5', width: 1.5, type: 'dashed' },
@@ -5456,7 +5588,7 @@
                     formatter: IS_MOBILE ? '80%' : '80% target',
                     color: '#5cc4b5', fontFamily: T.mono,
                     fontSize: IS_MOBILE ? 8 : 9, fontWeight: 700,
-                    position: 'insideEndTop',
+                    position: 'end',
                     distance: IS_MOBILE ? 2 : 4,
                     backgroundColor: T.bg,
                     padding: IS_MOBILE ? [2, 4] : [3, 6],
@@ -5472,6 +5604,9 @@
     }
     renderTrends('avg_ctx', 'day');
     highlightMetricTile('avg_ctx');
+    requestAnimationFrame(() => {
+      try { trendsChart.resize(); } catch (_) {}
+    });
 
     // Persist dataZoom range — capture whatever the user drags the
     // slider to, then replay it when renderTrends runs after a metric
@@ -5515,6 +5650,9 @@
         renderMetricStrip();
         renderTrends(currentMetric, null);
         highlightMetricTile(currentMetric);
+        requestAnimationFrame(() => {
+          try { trendsChart.resize(); } catch (_) {}
+        });
       });
     }
 
@@ -5539,6 +5677,14 @@
     document.querySelectorAll('.metric-tile').forEach(el => {
       el.classList.toggle('active', el.dataset.metric === metric);
     });
+    // Update chart section heading with the active metric's label.
+    // Read label from the tile DOM — avoids scope dependency on METRICS const.
+    const heading = document.querySelector('.trends-head--chart h2');
+    if (heading) {
+      const activeTile = document.querySelector('.metric-tile[data-metric="' + metric + '"] .metric-tile-label');
+      const label = activeTile ? activeTile.textContent.trim() : (metric || 'Daily & weekly history');
+      heading.textContent = label;
+    }
   }
 
   // ─── Resize + initial render ──────────────────────────────────────
@@ -5716,11 +5862,12 @@
       const body = { ts_ms: now, source: 'dashboard-wide' };
       if (cal.h5) body.h5 = { pct: cal.h5.pct, anchorTs: cal.h5.anchorTs, capUsd: cal.h5.capUsd, capTok: cal.h5.capTok };
       if (cal.wk) body.wk = { pct: cal.wk.pct, capUsd: cal.wk.capUsd, capTok: cal.wk.capTok };
-      fetch('/api/calibrations/manual', {
+      fetchLiveApi('/api/calibrations/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).then(r => r.json()).then(d => {
+      }).then(d => {
+        if (!d) return;
         if (d.ok) console.log('[calibration] saved to sidecar, manual_count=' + d.manual_count);
         else console.warn('[calibration] server error:', d.error);
       }).catch(err => console.warn('[calibration] POST failed (server may be down):', err));
@@ -5799,49 +5946,8 @@
       const E = P.efficiency;
       const rate = E.blended_usd_per_mtok;
       const cf = E.counterfactuals || {};
-      const mix = E.mix || {};
-      const heavyShare = E.heavy_ctx_share || 0;
 
       const fmtRate = v => v == null ? '—' : '$' + v.toFixed(2);
-      const fmtMult = (cfRate) => {
-        if (!cfRate || !rate || cfRate <= 0) return '';
-        const mult = rate / cfRate;
-        return mult >= 1.1 ? mult.toFixed(1) + '× tokens' : '';
-      };
-      const pct = v => (v == null ? '—' : (v * 100).toFixed(0) + '%');
-
-      // Headline: blended rate + mix breakdown. Opus is split into 4
-      // ctx-tier bands so you can see WHERE the tokens are going —
-      // biggest / darkest band = most room to improve.
-      const mixD = E.mix_detailed || {};
-      const segs = [
-        { cls: 'seg-opus-u200k',    label: 'opus <200K',      pct: mixD.opus_u200k    || 0 },
-        { cls: 'seg-opus-200-500k', label: 'opus 200–500K',   pct: mixD.opus_200_500k || 0 },
-        { cls: 'seg-opus-500-800k', label: 'opus 500–800K',   pct: mixD.opus_500_800k || 0 },
-        { cls: 'seg-opus-o800k',    label: 'opus >800K',      pct: mixD.opus_o800k    || 0 },
-        { cls: 'seg-sonnet',        label: 'sonnet',          pct: mixD.sonnet        || 0 },
-        { cls: 'seg-haiku',         label: 'haiku',           pct: mixD.haiku         || 0 },
-      ];
-      // Each segment gets its % label inside when the segment is wide
-      // enough to accommodate it; narrow slivers render empty and
-      // rely on the legend below for identification.
-      const barSegs = segs.map(s => {
-        const pctStr = (s.pct * 100).toFixed(0) + '%';
-        const widthStr = (s.pct * 100).toFixed(1) + '%';
-        // Roughly: segments under 4% of total width can't hold a 3-char
-        // label. Mark those so CSS hides the text cleanly.
-        const tooNarrow = s.pct < 0.04 ? ' data-label-hidden="1"' : '';
-        return '<span class="' + s.cls + '" style="width:' + widthStr + '" ' +
-          'title="' + s.label + ' · ' + pctStr + '"' + tooNarrow + '>' + pctStr + '</span>';
-      }).join('');
-      const legendSegs = segs
-        .filter(s => s.pct >= 0.005)  // hide slivers below 0.5%
-        .map(s =>
-          '<span class="eff-mix-legend-item">' +
-            '<span class="legend-swatch ' + s.cls + '"></span>' +
-            '<strong>' + pct(s.pct) + '</strong> ' + s.label +
-          '</span>'
-        ).join('');
 
       // Composition section lives at the TOP of the heavy-turn card so
       // the mix bar, mekko, and evolution chart read as one unit. The
@@ -5927,10 +6033,10 @@
       // lightest → heaviest. Hyphen (not em-dash) in the range labels —
       // narrower glyph fits in the left gutter on narrow viewports.
       const BANDS = [
-        { key: '<200K',    turns: bandTurns[0], tokens: bandTokens[0], color: '#4a8a7e' },
-        { key: '200-500K', turns: bandTurns[1], tokens: bandTokens[1], color: '#e4b86a' },
-        { key: '500-800K', turns: bandTurns[2], tokens: bandTokens[2], color: '#cf4f3c' },
-        { key: '≥800K',    turns: bandTurns[3], tokens: bandTokens[3], color: '#8e2626' },
+        { key: '<200K',    turns: bandTurns[0], tokens: bandTokens[0], color: CTX_TIER_COLORS.u200k },
+        { key: '200-500K', turns: bandTurns[1], tokens: bandTokens[1], color: CTX_TIER_COLORS['200_500k'] },
+        { key: '500-800K', turns: bandTurns[2], tokens: bandTokens[2], color: CTX_TIER_COLORS['500_800k'] },
+        { key: '≥800K',    turns: bandTurns[3], tokens: bandTokens[3], color: CTX_TIER_COLORS.o800k },
       ].map(b => ({ ...b, lift: b.turns > 0 ? b.tokens / b.turns : 0 }));
 
       // Luminance-based contrast picker for text-on-fill
@@ -6028,7 +6134,7 @@
         add('text', {
           x: dividerX - 6, y: titleY,
           'text-anchor': 'end',
-          'font-family': "'Cabinet Grotesk', sans-serif",
+          'font-family': "Palatino, \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
           'font-weight': 800, 'font-size': titleSize,
           fill: T.ink,
           'letter-spacing': '0.06em',
@@ -6036,7 +6142,7 @@
         add('text', {
           x: dividerX + 6, y: titleY,
           'text-anchor': 'start',
-          'font-family': "'Cabinet Grotesk', sans-serif",
+          'font-family': "Palatino, \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
           'font-weight': 800, 'font-size': titleSize,
           fill: T.ink,
           'letter-spacing': '0.06em',
@@ -6147,7 +6253,7 @@
             add('text', {
               x: leftColX - 6, y: labelY,
               'text-anchor': 'end',
-              'font-family': "'Cabinet Grotesk', sans-serif",
+              'font-family': "Palatino, \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
               'font-weight': 700, 'font-size': 11,
               fill: b.color,
             }, b.key);
@@ -6172,7 +6278,7 @@
             add('text', {
               x: leftColX + leftColW/2, y: s.mid - 3,
               'text-anchor': 'middle',
-              'font-family': "'Cabinet Grotesk', sans-serif",
+              'font-family': "Palatino, \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
               'font-weight': 700, 'font-size': 13, fill: ink,
             }, b.key);
             add('text', {
@@ -6185,7 +6291,7 @@
             add('text', {
               x: leftColX + leftColW/2, y: s.mid + 4,
               'text-anchor': 'middle',
-              'font-family': "'Cabinet Grotesk', sans-serif",
+              'font-family': "Palatino, \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
               'font-weight': 700, 'font-size': 11, fill: ink,
             }, b.key + ' · ' + (b.turns * 100).toFixed(0) + '%');
           } else {
@@ -6199,7 +6305,7 @@
             add('text', {
               x: anchorX, y: calloutY,
               'text-anchor': 'middle',
-              'font-family': "'Cabinet Grotesk', sans-serif",
+              'font-family': "Palatino, \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
               'font-weight': 700, 'font-size': 11, fill: b.color,
             }, b.key + ' · ' + (b.turns * 100).toFixed(0) + '%');
           }
@@ -6342,17 +6448,44 @@
     // bottom bar = turn share, connected by tier-colored ribbons.
     // Lift × floats at each ribbon's midpoint. Full-width on desktop.
     const ribbonHost = document.getElementById('heavy-ribbon');
+    const trendEl = document.getElementById('heavy-trend');
+    const heavySplit = ribbonHost ? ribbonHost.closest('.heavy-visual-split') : null;
     const paneLegend = document.getElementById('heavy-pane-legend');
     const ribbonHeadline = document.getElementById('heavy-ribbon-headline');
     const ribbonSubtitle = document.querySelector('.heavy-turn-card .lever-card-hint');
+    let trendGroup = 'bands';   // 'bands' | 'headless'
+    let trendRange = 90;        // 7 | 30 | 90 | 'all'
+    const heavyAllDaily = DATA.daily_stats || [];
+    const heavyRangeLabel = () => trendRange === 'all' ? 'all time' : `last ${trendRange} days`;
+    const currentHeavyDaily = () => trendRange === 'all'
+      ? heavyAllDaily
+      : heavyAllDaily.slice(-Number(trendRange));
+    function syncHeavyChartWidth() {
+      const source = heavySplit || ribbonHost;
+      if (!source) return 0;
+      const w = Math.round(source.getBoundingClientRect().width || source.clientWidth || 0);
+      if (w > 0 && heavySplit) heavySplit.style.setProperty('--heavy-chart-width', w + 'px');
+      return w;
+    }
+    const HEADLESS_DEFS = [
+      { key: 'Interactive',
+        color: '#4a8a7e',
+        getTokens: d => Math.max(0, (d.tokens || 0) - (d.tokens_headless || 0)),
+        getTurns:  d => Math.max(0, (d.turns  || 0) - (d.turns_headless  || 0)) },
+      { key: 'Headless',
+        color: '#9a7bd4',
+        getTokens: d => d.tokens_headless || 0,
+        getTurns:  d => d.turns_headless  || 0 },
+    ];
+    let renderPaneLegend = () => {};
     if (ribbonHost && P.heavy_buckets) {
       const byModel = (P.heavy_buckets && P.heavy_buckets.by_model) || {};
 
       const RIBBON_TIERS = [
-        { name: '<200K Opus',    colorVar: '--tier-small',    key: 'opus_u200k' },
-        { name: '200–500K Opus', colorVar: '--tier-mid-low',  key: 'opus_200_500k' },
-        { name: '500–800K Opus', colorVar: '--tier-mid-high', key: 'opus_500_800k' },
-        { name: '≥800K Opus',    colorVar: '--tier-large',    key: 'opus_o800k' },
+        { name: '<200K (Opus·Fable)',    colorVar: '--tier-small',    key: 'opus_u200k' },
+        { name: '200–500K (Opus·Fable)', colorVar: '--tier-mid-low',  key: 'opus_200_500k' },
+        { name: '500–800K (Opus·Fable)', colorVar: '--tier-mid-high', key: 'opus_500_800k' },
+        { name: '>800K (Opus·Fable)',    colorVar: '--tier-large',    key: 'opus_o800k' },
         { name: 'Sonnet (all)',  colorVar: '--model-sonnet',  key: 'sonnet' },
       ].filter(t => {
         const m = byModel[t.key];
@@ -6383,48 +6516,129 @@
       // mekko used hard-coded hexes; we reuse those here via a local
       // lookup so the ribbon doesn't need CSS var additions.
       const RIBBON_COLORS = {
-        '--tier-small':    '#4a8a7e',
-        '--tier-mid-low':  '#e4b86a',
-        '--tier-mid-high': '#cf4f3c',
-        '--tier-large':    '#8e2626',
-        '--model-sonnet':  '#b47cc8',   // purple — distinct from Opus <200K teal
-        '--model-haiku':   '#6b8ec4',
+        '--tier-small':    '#e8d5a3',   // <200K   — pale sand   (--band-ctx-1)
+        '--tier-mid-low':  '#c98a3a',   // 200–500K — amber      (--band-ctx-2)
+        '--tier-mid-high': '#9a4530',   // 500–800K — sienna     (--band-ctx-3)
+        '--tier-large':    '#5c1f18',   // ≥800K   — mahogany    (--band-ctx-4)
+        '--model-sonnet':  '#7c5cad',   // Sonnet — cool purple  (--band-sonnet)
+        '--model-haiku':   '#3a7aa8',   // Haiku  — teal-blue    (--band-haiku)
       };
+      let BAND_DEFS = [];
+      const ribbonColor = (tier) => tier.color || RIBBON_COLORS[tier.colorVar];
+      const uniqueLegendItems = (items) => {
+        const seen = new Set();
+        return items.filter(item => {
+          if (!item || seen.has(item.name)) return false;
+          seen.add(item.name);
+          return true;
+        });
+      };
+      let bandLegendItems = RIBBON_TIERS.map(t => ({
+        name: t.name,
+        color: ribbonColor(t),
+      }));
+
+      function buildHeadlessRibbonTiers() {
+        const agg = currentHeavyDaily().reduce((acc, d) => {
+          acc.tokens += d.tokens || 0;
+          acc.tokens_headless += d.tokens_headless || 0;
+          acc.turns += d.turns || 0;
+          acc.turns_headless += d.turns_headless || 0;
+          return acc;
+        }, { tokens: 0, tokens_headless: 0, turns: 0, turns_headless: 0 });
+        const totalTokens = agg.tokens || 0;
+        const totalTurns = agg.turns || 0;
+        return HEADLESS_DEFS.map(def => {
+          const tokens = def.getTokens(agg);
+          const turns = def.getTurns(agg);
+          const tokenShare = totalTokens > 0 ? tokens / totalTokens : 0;
+          const turnShare = totalTurns > 0 ? turns / totalTurns : 0;
+          return {
+            name: def.key,
+            key: def.key,
+            color: def.color,
+            tokenPct: tokenShare * 100,
+            turnPct: turnShare * 100,
+            lift: turnShare > 0 ? tokenShare / turnShare : 0,
+          };
+        });
+      }
+      function buildBandRibbonTiers() {
+        if (!BAND_DEFS.length) return RIBBON_TIERS;
+        const rangeDaily = currentHeavyDaily();
+        const totalTokens = rangeDaily.reduce((s, d) => s + (d.tokens || 0), 0);
+        const totalTurns = rangeDaily.reduce((s, d) => s + (d.turns || 0), 0);
+        return BAND_DEFS.map(def => {
+          const tokens = rangeDaily.reduce((s, d) => s + def.getTokens(d), 0);
+          const turns = rangeDaily.reduce((s, d) => s + def.getTurns(d), 0);
+          const tokenShare = totalTokens > 0 ? tokens / totalTokens : 0;
+          const turnShare = totalTurns > 0 ? turns / totalTurns : 0;
+          return {
+            name: def.key,
+            key: def.key,
+            color: def.color,
+            tokenPct: tokenShare * 100,
+            turnPct: turnShare * 100,
+            lift: turnShare > 0 ? tokenShare / turnShare : 0,
+          };
+        }).filter(t => t.tokenPct > 0 || t.turnPct > 0);
+      }
+
+      function activeRibbonTiers() {
+        return trendGroup === 'headless' ? buildHeadlessRibbonTiers() : buildBandRibbonTiers();
+      }
 
       // P0 — pane-level legend (one source of truth across ribbon + trend).
-      function renderPaneLegend() {
+      renderPaneLegend = function() {
         if (!paneLegend) return;
         paneLegend.innerHTML = '';
         const key = document.createElement('span');
         key.className = 'heavy-pane-legend-key';
-        key.textContent = 'Model + context band';
+        key.textContent = trendGroup === 'headless' ? 'Interactive vs headless' : 'Model + context band';
         paneLegend.appendChild(key);
-        RIBBON_TIERS.forEach(tier => {
+        const legendItems = trendGroup === 'headless'
+          ? HEADLESS_DEFS.map(b => ({ name: b.key, color: b.color }))
+          : bandLegendItems;
+        legendItems.forEach(item => {
           const lab = document.createElement('span');
           lab.className = 'heavy-pane-legend-label';
           const sw = document.createElement('span');
           sw.className = 'heavy-pane-legend-box';
-          sw.style.background = RIBBON_COLORS[tier.colorVar];
-          const txt = document.createTextNode(tier.name);
+          sw.style.background = item.color;
+          const txt = document.createTextNode(item.name);
           lab.appendChild(sw);
           lab.appendChild(txt);
           paneLegend.appendChild(lab);
         });
-      }
+      };
 
-      // P0 — assertive ribbon headline driven by the highest-lift Opus band.
+      // P0 — assertive ribbon headline driven by the highest-lift Opus+Fable band.
       // Sonnet/Haiku tiers are excluded — their flat-pricing lift (~1×) isn't
-      // the cost narrative; Opus heavy-context bands are.
+      // the cost narrative; big-context heavy bands are.
       function renderRibbonHeadline() {
         if (!ribbonHeadline) return;
-        const heavy = RIBBON_TIERS
-          .filter(t => t.key && t.key.startsWith('opus_'))
+        const rangeText = heavyRangeLabel();
+        if (trendGroup === 'headless') {
+          const heavy = buildHeadlessRibbonTiers()
+            .filter(t => t.turnPct > 0)
+            .sort((a, b) => b.lift - a.lift)[0] || null;
+          let headline = `Tokens roughly track turns by interactive vs headless · ${rangeText}`;
+          if (heavy && heavy.lift >= 1.15) {
+            const lift = heavy.lift >= 10 ? heavy.lift.toFixed(0) : heavy.lift.toFixed(1);
+            headline = `${heavy.name} turns eat ${lift}× their share of tokens · ${rangeText}`;
+          }
+          ribbonHeadline.textContent = headline;
+          if (ribbonSubtitle) ribbonSubtitle.textContent = headline;
+          return;
+        }
+        const heavy = activeRibbonTiers()
+          .filter(t => t.name && t.name.includes('Opus·Fable'))
           .filter(t => t.turnPct > 0)
           .sort((a, b) => b.lift - a.lift)[0] || null;
-        let headline = 'Tokens roughly track turns by context band · last 7 days';
+        let headline = `Tokens roughly track turns by context band · ${rangeText}`;
         if (heavy && heavy.lift >= 1.15) {
           const lift = heavy.lift >= 10 ? heavy.lift.toFixed(0) : heavy.lift.toFixed(1);
-          headline = `${heavy.name} turns eat ${lift}× their share of tokens · last 7 days`;
+          headline = `${heavy.name} turns eat ${lift}× their share of tokens · ${rangeText}`;
         }
         ribbonHeadline.textContent = headline;
         if (ribbonSubtitle) ribbonSubtitle.textContent = headline;
@@ -6434,12 +6648,13 @@
         ribbonHost.querySelectorAll(':scope > svg').forEach((el) => el.remove());
         renderPaneLegend();
         renderRibbonHeadline();
+        const ribbonTiers = activeRibbonTiers();
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
         /* Width: mirror the exact container ECharts measures so ribbon bar
            edges align with the column chart. */
         const _rbW = Math.round(
-          (trendEl ? trendEl.getBoundingClientRect().width : 0) ||
+          syncHeavyChartWidth() ||
           ribbonHost.getBoundingClientRect().width ||
           ribbonHost.clientWidth || 400
         );
@@ -6457,7 +6672,7 @@
         const viewBoxH = Math.max(320, Math.round(_rbH / _rbW * 1000));
         svg.setAttribute('viewBox', '0 0 1000 ' + viewBoxH);
         svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
-        svg.style.cssText = 'display:block;width:' + _rbW + 'px;height:' + _rbH + 'px;max-width:100%;';
+        svg.style.cssText = 'display:block;width:100%;height:' + _rbH + 'px;max-width:100%;';
         ribbonHost.appendChild(svg);
 
         const mk = (name, attrs, text) => {
@@ -6506,27 +6721,33 @@
         // Now that the column chart uses model-specific bands, Sonnet/Haiku
         // map to real series and get true cross-highlights too.
         const RIBBON_TO_BAND = {
-          'opus_u200k':     '<200K (Opus)',
-          'opus_200_500k':  '200–500K (Opus)',
-          'opus_500_800k':  '500–800K (Opus)',
-          'opus_o800k':     '≥800K (Opus)',
+          'opus_u200k':     '<200K (Opus·Fable)',
+          'opus_200_500k':  '200–500K (Opus·Fable)',
+          'opus_500_800k':  '500–800K (Opus·Fable)',
+          'opus_o800k':     '>800K (Opus·Fable)',
           'sonnet':         'Sonnet (all)',
           'haiku':          'Haiku (all)',
+          'Interactive':    'Interactive',
+          'Headless':       'Headless',
         };
         // Cross-highlight: when hovering a tier rect/path, highlight the
         // matching series in the column chart (window._heavyTrendChart).
         const attachCrossHighlight = (el, tierKey) => {
           if (!el) return;
           el.style.cursor = 'crosshair';
-          const bandName = RIBBON_TO_BAND[tierKey];
+          const bandName = RIBBON_TO_BAND[tierKey] || tierKey;
           el.addEventListener('mouseover', () => {
-            // Ribbon: dim all segs, pop this one with brightness + outline
-            document.querySelectorAll('.ribbon-seg').forEach(s => {
-              s.style.opacity = '0.2';
+            // Within-palette focus: dim non-hovered to 0.45, keep hovered at full opacity with slight brightness and 1px ink border.
+            document.querySelectorAll('.ribbon-seg, .ribbon-path').forEach(s => {
+              s.style.opacity = '0.45';
               s.style.filter = '';
+              s.style.stroke = '';
+              s.style.strokeWidth = '';
             });
             el.style.opacity = '1';
-            el.style.filter = 'brightness(1.5) drop-shadow(0 0 4px rgba(255,255,255,0.35))';
+            el.style.filter = 'brightness(1.12)';
+            el.style.stroke = 'rgba(255,255,255,0.5)';
+            el.style.strokeWidth = '1px';
             // ECharts column chart highlight
             const tc = window._heavyTrendChart;
             if (!tc) return;
@@ -6536,10 +6757,12 @@
             }
           });
           el.addEventListener('mouseout', () => {
-            // Restore ribbon segments
-            document.querySelectorAll('.ribbon-seg').forEach(s => {
+            // Restore ribbon segments and ribbon paths
+            document.querySelectorAll('.ribbon-seg, .ribbon-path').forEach(s => {
               s.style.opacity = '';
               s.style.filter = '';
+              s.style.stroke = '';
+              s.style.strokeWidth = '';
             });
             const tc = window._heavyTrendChart;
             if (!tc) return;
@@ -6555,8 +6778,8 @@
         const SEG_PX_FLOOR  = 36;       // pixel-fit threshold (viewBox units)
         const tokSegs = [], turnSegs = [];
         let tx = barStartX, rx = barStartX;
-        RIBBON_TIERS.forEach((tier, idx) => {
-          const color = RIBBON_COLORS[tier.colorVar];
+        ribbonTiers.forEach((tier, idx) => {
+          const color = ribbonColor(tier);
           const tW = tier.tokenPct / 100 * barW;
           const rW = tier.turnPct  / 100 * barW;
 
@@ -6588,7 +6811,7 @@
         // (per Section 4 hideOverlap).
         const LIFT_PX_FLOOR = 56;
         const ribbonGeoms = [];
-        RIBBON_TIERS.forEach((tier, idx) => {
+        ribbonTiers.forEach((tier, idx) => {
           const tok = tokSegs[idx], tur = turnSegs[idx];
           if (tok.w < 0.5 && tur.w < 0.5) {
             ribbonGeoms.push(null);
@@ -6601,7 +6824,7 @@
             Q ${(R1+R2)/2} ${midY} ${R2} ${ribbonBottom}
             L ${L2} ${ribbonBottom}
             Q ${(L1+L2)/2} ${midY} ${L1} ${ribbonTop} Z`;
-          const ribbonPath = mk('path', { d, fill: RIBBON_COLORS[tier.colorVar],
+          const ribbonPath = mk('path', { d, fill: ribbonColor(tier),
                        class: 'ribbon-path', 'data-tier': idx });
           attachCrossHighlight(ribbonPath, tier.key);
           const mx = (tok.x + tok.w/2 + tur.x + tur.w/2) / 2;
@@ -6656,13 +6879,14 @@
             tipEl.removeAttribute('data-visible');
             return;
           }
-          const tier = RIBBON_TIERS[+idx];
+          const tier = ribbonTiers[+idx];
           const liftStr = tier.lift.toFixed(2) + '×';
-          const swatch = RIBBON_COLORS[tier.colorVar];
+          const swatch = ribbonColor(tier);
+          const tierLabel = trendGroup === 'headless' ? tier.name : tier.name + ' context';
           tipEl.innerHTML =
             '<div class="mt-head">' +
               '<span class="mt-swatch" style="background:' + swatch + '"></span>' +
-              '<span>' + tier.name + ' context</span>' +
+              '<span>' + tierLabel + '</span>' +
             '</div>' +
             '<div class="mt-row"><span>tokens share</span>' +
               '<b>' + tier.tokenPct.toFixed(1) + '%</b></div>' +
@@ -6683,11 +6907,21 @@
         svg.addEventListener('mousemove', onMove);
         svg.addEventListener('mouseleave', () => tipEl.removeAttribute('data-visible'));
       }
-      /* Double rAF: first rAF lets ECharts run its own resize (line ~6477),
-         second rAF fires after ECharts has updated trendEl — so we measure
-         the same settled width ECharts used. */
-      requestAnimationFrame(() => requestAnimationFrame(() => renderHeavyRibbon()));
-      window.addEventListener('resize', () => renderHeavyRibbon());
+      let heavyResizeRaf = 0;
+      function scheduleHeavyPaneResize() {
+        if (heavyResizeRaf) cancelAnimationFrame(heavyResizeRaf);
+        heavyResizeRaf = requestAnimationFrame(() => {
+          heavyResizeRaf = 0;
+          syncHeavyChartWidth();
+          const tc = window._heavyTrendChart;
+          if (tc) {
+            try { tc.resize(); } catch (_) {}
+          }
+          renderHeavyRibbon();
+        });
+      }
+      requestAnimationFrame(() => requestAnimationFrame(scheduleHeavyPaneResize));
+      window.addEventListener('resize', scheduleHeavyPaneResize);
 
       // ─── Time-trend area chart — 4 disjoint bands ──────────────────
       // Two toggles: Metric (Tokens/Turns) + Scale (Share/Level).
@@ -6695,15 +6929,14 @@
       //   Level: absolute values per day (y-axis 0-max, abbreviated)
       // Reads daily_stats (raw per-day counts for each threshold) and
       // derives the 4 disjoint bands client-side.
-      const trendEl = document.getElementById('heavy-trend');
       const trendHeader = document.getElementById('heavy-trend-title');
       const metricToggle = document.querySelector('.trend-toggle[aria-label="Trend metric"]');
       const scaleToggle = document.querySelector('.trend-toggle[aria-label="Trend scale"]');
       const rangeToggle = document.querySelector('.trend-toggle[aria-label="Trend range"]');
+      const groupToggle = document.querySelector('.trend-toggle[aria-label="Trend group"]');
       if (trendEl) {
         let trendMetric = 'tokens';   // 'tokens' | 'turns'
         let trendScale  = 'share';    // 'share'  | 'level'
-        let trendRange  = 90;         // 7 | 30 | 90 | 'all'
         let trendChart = null;
 
         // Capability-event marker dates, recomputed locally so this IIFE
@@ -6713,20 +6946,17 @@
           timeZone: 'America/Los_Angeles',
           year: 'numeric', month: '2-digit', day: '2-digit',
         }).format(new Date(ms));
-        // 1M context GA (Sonnet/Opus 4.6) shipped 2026-03-13 — see the
-        // matching block in the trends-chart scope above for why we anchor
-        // to the platform GA instead of personal first-use.
-        const ONE_M_GA = '2026-03-13';
-        const _todayPT = _fmtPTDate(Date.now());
-        const firstOneMDay = _todayPT >= ONE_M_GA ? ONE_M_GA : null;
+        const firstOneMDay = DATA.first_1m_ms ? _fmtPTDate(DATA.first_1m_ms) : null;
         const OPUS_47_RELEASE = '2026-04-16';
-        const showOpus47Marker = _todayPT >= OPUS_47_RELEASE;
+        const showOpus47Marker = _fmtPTDate(Date.now()) >= OPUS_47_RELEASE;
+        const OPUS_48_RELEASE = '2026-05-28';
+        const showOpus48Marker = _fmtPTDate(Date.now()) >= OPUS_48_RELEASE;
+        const FABLE_5_RELEASE = '2026-06-09';
+        const showFable5Marker = _fmtPTDate(Date.now()) >= FABLE_5_RELEASE;
 
         // All daily stats, we slice per-range inside buildSeries.
-        const allDaily = DATA.daily_stats || [];
-        const currentDaily = () => trendRange === 'all'
-          ? allDaily
-          : allDaily.slice(-Number(trendRange));
+        const allDaily = heavyAllDaily;
+        const currentDaily = currentHeavyDaily;
         // `days` + series are computed per-render via currentDaily(), so
         // they always reflect the active range.
         let daily = currentDaily();
@@ -6735,20 +6965,20 @@
         // Band definitions — model-specific, matching the ribbon chart's 5-tier
         // breakout. Uses the per-model context-band fields from daily_stats so
         // each band is disjoint and the stack sums to total tokens/turns.
-        const BAND_DEFS = [
-          { key: '<200K (Opus)',    color: '#4a8a7e',
+        BAND_DEFS = [
+          { key: '<200K (Opus·Fable)',    color: '#e8d5a3',
             getTokens: d => d.tokens_opus_u200k     || 0,
             getTurns:  d => d.turns_opus_u200k      || 0 },
-          { key: '200–500K (Opus)', color: '#e4b86a',
+          { key: '200–500K (Opus·Fable)', color: '#c98a3a',
             getTokens: d => d.tokens_opus_200_500k  || 0,
             getTurns:  d => d.turns_opus_200_500k   || 0 },
-          { key: '500–800K (Opus)', color: '#cf4f3c',
+          { key: '500–800K (Opus·Fable)', color: '#9a4530',
             getTokens: d => d.tokens_opus_500_800k  || 0,
             getTurns:  d => d.turns_opus_500_800k   || 0 },
-          { key: '≥800K (Opus)',    color: '#8e2626',
+          { key: '>800K (Opus·Fable)',    color: '#5c1f18',
             getTokens: d => d.tokens_opus_o800k     || 0,
             getTurns:  d => d.turns_opus_o800k      || 0 },
-          { key: 'Sonnet (all)',    color: '#b47cc8',   // purple — distinct from Opus <200K teal
+          { key: 'Sonnet (all)',    color: '#7c5cad',
             getTokens: d => d.tokens_sonnet         || 0,
             getTurns:  d => d.sonnet                || 0 },
         ];
@@ -6757,16 +6987,20 @@
           const t = d.tokens || 1; return (d.tokens_haiku || 0) / t >= 0.02;
         });
         if (_haikuMaterial) {
-          BAND_DEFS.push({ key: 'Haiku (all)', color: '#6b8ec4',
+          BAND_DEFS.push({ key: 'Haiku (all)', color: '#3a7aa8',
             getTokens: d => d.tokens_haiku || 0,
             getTurns:  d => d.haiku        || 0 });
         }
-
+        bandLegendItems = uniqueLegendItems([
+          ...BAND_DEFS.map(b => ({ name: b.key, color: b.color })),
+          ...RIBBON_TIERS.map(t => ({ name: t.name, color: ribbonColor(t) })),
+        ]);
         // Returns [{key,color,data}] where data[i] is the numeric value
         // for day i in the chosen metric + scale.
         function buildSeries(metric, scale) {
           const total = (d) => metric === 'turns' ? (d.turns || 0) : (d.tokens || 0);
-          return BAND_DEFS.map(b => {
+          const activeDefs = trendGroup === 'headless' ? HEADLESS_DEFS : BAND_DEFS;
+          return activeDefs.map(b => {
             const rawData = daily.map(d =>
               metric === 'turns' ? b.getTurns(d) : b.getTokens(d)
             );
@@ -6801,22 +7035,22 @@
             // can dispatch highlight/downplay actions on hover. Keyed under
             // window._heavyTrendChart per Feature 3 cross-highlight wiring.
             window._heavyTrendChart = trendChart;
-            window.addEventListener('resize', () => trendChart.resize());
           }
           // Refresh the visible window before building series.
           daily = currentDaily();
           days = daily.map(d => d.day);
           const series = buildSeries(trendMetric, trendScale);
           const metricWord = trendMetric === 'turns' ? 'turns' : 'tokens';
-          const scaleWord  = trendScale === 'share' ? 'Share' : 'Volume';
 
           // Header reflects the current toggle combo so reader knows
           // exactly what is being plotted. Range is implicit (toggle row).
           if (trendHeader) {
             const noun = trendMetric === 'turns' ? 'turn' : 'token';
             const what = trendScale === 'share' ? 'mix' : 'volume';
-            trendHeader.textContent = `Daily ${noun} ${what} by context band`;
+            const groupDesc = trendGroup === 'headless' ? 'interactive vs headless' : 'context band';
+            trendHeader.textContent = `Daily ${noun} ${what} by ${groupDesc}`;
           }
+          trendEl.setAttribute('aria-label', `Heavy-turn evolution stacked area chart — ${heavyRangeLabel()}`);
 
           // Y-axis config depends on scale mode. Splitline alpha bumped
           // 0.05 → 0.07 (P2) so gridlines remain readable on dark panes
@@ -6862,7 +7096,7 @@
             grid: {
               top: 26,
               left: 0,
-              right: '2%',
+              right: 0,
               bottom: 24,
               containLabel: false,
             },
@@ -6939,13 +7173,17 @@
               // hanging off the left axis on short ranges.
               const isTop = (i === series.length - 1);
               const inWindow = (d) => d && days.length && d >= days[0] && d <= days[days.length - 1];
+              // Weekly x categories are week-start dates; snap each marker to
+              // the week bucket it falls in (largest week-start <= date) so it renders.
+              const snapWk = (d) => { if (!d || !days.length || d < days[0]) return null; let r=null; for (const x of days){ if (x<=d) r=x; else break; } return r; };
               const markData = [];
               if (isTop) {
-                if (firstOneMDay && inWindow(firstOneMDay)) {
+                if (firstOneMDay && snapWk(firstOneMDay)) {
                   markData.push({
-                    xAxis: firstOneMDay,
+                    xAxis: snapWk(firstOneMDay),
                     lineStyle: { color: T.warn, width: 1.2, type: 'dashed' },
                     label: {
+                      rotate: 0,
                       color: T.warn, fontFamily: T.mono,
                       fontSize: 11, fontWeight: 700,
                       position: 'end',
@@ -6956,15 +7194,48 @@
                     },
                   });
                 }
-                if (showOpus47Marker && inWindow(OPUS_47_RELEASE)) {
+                if (showOpus47Marker && snapWk(OPUS_47_RELEASE)) {
                   markData.push({
-                    xAxis: OPUS_47_RELEASE,
+                    xAxis: snapWk(OPUS_47_RELEASE),
                     lineStyle: { color: T.sonnet, width: 1.2, type: 'dashed' },
                     label: {
+                      rotate: 0,
                       color: T.sonnet, fontFamily: T.mono,
                       fontSize: 11, fontWeight: 700,
                       position: 'end',
                       formatter: 'Opus 4.7',
+                      backgroundColor: T.bg,
+                      padding: [3, 7], lineHeight: 13,
+                      borderRadius: 3,
+                    },
+                  });
+                }
+                if (showOpus48Marker && snapWk(OPUS_48_RELEASE)) {
+                  markData.push({
+                    xAxis: snapWk(OPUS_48_RELEASE),
+                    lineStyle: { color: T.sonnet, width: 1.2, type: 'dashed' },
+                    label: {
+                      rotate: 0,
+                      color: T.sonnet, fontFamily: T.mono,
+                      fontSize: 11, fontWeight: 700,
+                      position: 'end',
+                      formatter: 'Opus 4.8',
+                      backgroundColor: T.bg,
+                      padding: [3, 7], lineHeight: 13,
+                      borderRadius: 3,
+                    },
+                  });
+                }
+                if (showFable5Marker && snapWk(FABLE_5_RELEASE)) {
+                  markData.push({
+                    xAxis: snapWk(FABLE_5_RELEASE),
+                    lineStyle: { color: T.fable, width: 1.2, type: 'dashed' },
+                    label: {
+                      rotate: 0,
+                      color: T.fable, fontFamily: T.mono,
+                      fontSize: 11, fontWeight: 700,
+                      position: 'end',
+                      formatter: 'Fable 5',
                       backgroundColor: T.bg,
                       padding: [3, 7], lineHeight: 13,
                       borderRadius: 3,
@@ -6991,9 +7262,14 @@
                    invisible so the active band is unmistakable. */
                 emphasis: {
                   focus: 'series',
-                  itemStyle: { opacity: 1, shadowBlur: 6, shadowColor: s.color },
+                  blurScope: 'coordinateSystem',
+                  itemStyle: {
+                    opacity: 1,
+                    borderColor: 'rgba(255,255,255,0.7)',
+                    borderWidth: 1,
+                  },
                 },
-                blur: { itemStyle: { opacity: 0.06 } },
+                blur: { itemStyle: { opacity: 0.45 } },
                 /* In-bar labels off — pane legend + tooltip carry identity. */
                 label: { show: false },
                 data: s.data,
@@ -7005,14 +7281,13 @@
               };
             }),
           }, true);
-          requestAnimationFrame(() => {
-            try { trendChart.resize(); } catch (_) {}
-          });
+          renderPaneLegend();
+          scheduleHeavyPaneResize();
         }
         renderTrend();
 
         // Toggle wiring — both groups share the same render pipeline.
-        function bindToggle(el, attr, setter) {
+        function bindToggle(el, attr, setter, afterRender) {
           if (!el) return;
           el.addEventListener('click', (e) => {
             const btn = e.target.closest('button[' + attr + ']');
@@ -7023,6 +7298,7 @@
               b.classList.toggle('active', b.getAttribute(attr) === v)
             );
             renderTrend();
+            if (afterRender) afterRender();
           });
         }
         bindToggle(metricToggle, 'data-trend-metric', (v) => {
@@ -7038,7 +7314,11 @@
           if (next === trendRange) return false;
           trendRange = next;
           return true;
-        });
+        }, scheduleHeavyPaneResize);
+        bindToggle(groupToggle, 'data-trend-group', (v) => {
+          if (v === trendGroup) return false;
+          trendGroup = v; return true;
+        }, scheduleHeavyPaneResize);
       }
     }
 
@@ -7080,7 +7360,7 @@
           b = {
             sid: t.s, n_turns: 0, total_ctx: 0, max_ctx: 0, total_cost: 0,
             first_ts: t.ts, last_ts: t.ts,
-            model_counts: { opus: 0, sonnet: 0, haiku: 0, unknown: 0 },
+            model_counts: { opus: 0, fable: 0, sonnet: 0, haiku: 0, unknown: 0 },
           };
           buckets.set(t.s, b);
         }
@@ -7259,7 +7539,8 @@
     if (!btn) return;
 
     const PREVIEW_COLS = ['day','turns','cost','tokens','avg_ctx','cache_hit_rate',
-                          'opus','sonnet','haiku','cost_per_turn'];
+                          'opus','fable','sonnet','haiku','cost_opus','cost_fable',
+                          'cost_sonnet','cost_haiku','tokens_fable','cost_per_turn'];
     const PREVIEW_ROWS = 8;
 
     function buildCsv(rows) {
@@ -7305,7 +7586,7 @@
                 `<tr>${previewCols.map(c => {
                   const v = r[c];
                   if (c === 'day') return `<td>${v}</td>`;
-                  if (c === 'cost' || c === 'cost_per_turn') return `<td>$${Number(v).toFixed(2)}</td>`;
+                  if (c === 'cost' || c === 'cost_per_turn' || c.startsWith('cost_')) return `<td>$${Number(v).toFixed(2)}</td>`;
                   if (c === 'cache_hit_rate') return `<td>${(Number(v)*100).toFixed(1)}%</td>`;
                   if (typeof v === 'number') return `<td>${v.toLocaleString()}</td>`;
                   return `<td>${v ?? ''}</td>`;
@@ -7363,18 +7644,13 @@
 })();
 </script>
 <!-- Shared rich tooltip for KPI metric tiles. Positioned at cursor by
-     positionTooltip() in renderMetricStrip; replaces bare title attr.
-     Background/border read from theme vars so the tooltip flips with
-     light/dark mode (Bug fix 2026-05-14: was hardcoded #0f0f1a → showed
-     as a black square in light mode). */ -->
+     positionTooltip() in renderMetricStrip; replaces bare title attr. -->
 <div id="kpi-tooltip" style="
   position: fixed; z-index: 9999; pointer-events: none;
-  background: var(--tooltip-bg, #0f0f1a);
-  border: 1px solid var(--border, rgba(255,255,255,0.12));
-  border-radius: 8px; padding: 8px 12px; font-size: 12px;
-  color: var(--ink, #e8e8f0);
+  background: #0f0f1a; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink, #e8e8f0);
   white-space: nowrap; display: none; line-height: 1.6;
-  box-shadow: 0 4px 20px var(--pane-shadow, rgba(0,0,0,0.7));
+  box-shadow: 0 4px 20px rgba(0,0,0,0.7);
 "></div>
 
 <!-- ─── Dashboard Tour ────────────────────────────────────────────────────
@@ -7534,9 +7810,16 @@
   const STEPS = [
     {
       title: 'Interactive dashboard tour',
-      body:  'Ten stops covering the key features — pacing, filters, toggles, charts, and data export. Use <strong>← →</strong> keys or the buttons below. Press <strong>Esc</strong> to exit any time.',
+      body:  'Twelve stops covering the key features — pacing, filters, toggles, charts, and data export. Use <strong>← →</strong> keys or the buttons below. Press <strong>Esc</strong> to exit any time.',
       target: null,
       cardAnchor: 'center',
+    },
+    {
+      title: 'Light & dark mode',
+      body:  'The dashboard ships with both themes — watch, here\'s a quick preview ↗. Click the toggle yourself any time to switch for real; your preference persists across refreshes (the page reloads to re-render every chart in the new palette).',
+      target: '#theme-toggle',
+      pad: 8,
+      demo: 'flipTheme',
     },
     {
       title: 'Usage pace',
@@ -7554,7 +7837,7 @@
     },
     {
       title: 'At a glance — KPI strip',
-      body:  'Each tile compares a metric to the prior period. Tiles auto-sort by <strong>direction of change</strong> — metrics that moved <em>against you</em> on the <strong>left</strong> (red, "worse"), metrics that moved <em>for you</em> on the <strong>right</strong> (green, "better"). Each metric has its own sense: rising cost is bad, rising cache hit rate is good — the sort respects that. <strong>Click a tile</strong> to plot it in the historical chart below.',
+      body:  'Each tile compares a metric to the prior period. Tiles auto-sort by <strong>direction of change</strong> — metrics that moved <em>against you</em> on the <strong>left</strong> (red, "worse"), metrics that moved <em>for you</em> on the <strong>right</strong> (green, "better"). Each metric has its own sense: rising cost is bad, rising cache hit rate is good — the sort respects that. <strong>Click a tile</strong> to plot it in the historical chart below. The new <strong>headless</strong> tile tracks the share of tokens burned by non-interactive runs — <code>claude -p</code>, SDK calls, and scheduled jobs.',
       target: '#metric-strip-wrap',
       pad: 6,
       demo: 'cycleKpiTiles',
@@ -7569,24 +7852,33 @@
     },
     {
       title: 'Historical trends — zoom & granularity',
-      body:  'Drag the <strong>range slider</strong> below the chart to zoom in. Your zoom persists when you switch KPI tiles. Toggle <strong>Day / Week</strong> to change aggregation. Dashed markers show capability events — 1M context launch and Opus 4.7.',
-      target: '#trends',
+      body:  'Drag the <strong>range slider</strong> below the chart to zoom in. Your zoom persists when you switch KPI tiles. Toggle <strong>Day / Week</strong> to change aggregation. Dashed markers show capability events — 1M context launch, Opus launches, and Fable 5.',
+      targets: ['.trends-head--chart', '#trends'],
       pad: 10,
+      demo: 'granWeekly',
       // inherits rightDock — card still parked at sessions-tile left edge
     },
     {
       title: 'Context depth — token burn by context size',
-      body:  'Each column is one day; height = tokens burned in heavy turns (>200K context). <strong>Color bands</strong> break out Opus context tiers vs Sonnet. <strong>Hover a band on the ribbon</strong> to cross-filter the column chart — the matching series lights up while others dim. Watch the auto-demo run through each band ↓.',
-      target: '#heavy-ribbon',
+      body:  'Each column is one day; height = tokens burned in heavy turns (>200K context). <strong>Color bands</strong> break out Opus·Fable context tiers vs Sonnet. <strong>Hover a band on the ribbon</strong> to cross-filter the column chart — the matching series lights up while others dim. Watch the auto-demo run through each band ↓.',
+      targets: ['#heavy-ribbon', '#heavy-trend'],
       pad: 10,
       demo: 'cycleRibbon',
       cardAnchor: 'leftDock',  // mirror move: right edge of left-hand tile
     },
     {
-      title: 'Trend toggles — metric, scale & range',
-      body:  'Three toggle groups control the evolution chart. <strong>Metric</strong>: tokens or turns. <strong>Scale</strong>: Share (% composition) or Level (absolute). <strong>Range</strong>: 7d / 30d / 90d / All. Mix and match — e.g. turns × level × 7d to see raw daily activity.',
-      target: '.heavy-trend-toggles',
+      title: 'Pane controls — one scope for both charts',
+      body:  'This chrome row governs the <strong>entire pane</strong> — both the ribbon above and the stacked chart below. The <strong>legend</strong> is the single source of truth for series colors in both charts. <strong>Range</strong> (7d/30d/90d/All) re-windows the ribbon, the stacked chart, and the headline text together. <strong>Group</strong> switches the whole pane between <em>context bands</em> and <em>interactive vs headless</em> — handy for seeing how much burn comes from <code>claude -p</code> and scheduled jobs.',
+      target: '.heavy-pane-toolbar',
       pad: 8,
+      // inherits leftDock
+    },
+    {
+      title: 'Chart toggles — metric & scale',
+      body:  'Two toggles tune the evolution chart itself. <strong>Metric</strong>: tokens or turns. <strong>Scale</strong>: Share (% composition) or Level (absolute values). These act on this chart only — the pane-wide Range and Group controls live up in the chrome row you just saw.',
+      targets: ['.heavy-trend-header', '#heavy-trend'],
+      pad: 8,
+      demo: 'cycleTrendToggles',
       // inherits aboveStrip
     },
     {
@@ -7595,10 +7887,11 @@
       target: '#download-btn',
       placement: 'bottom',
       pad: 8,
+      demo: 'openCsvPreview',
     },
     {
       title: 'That\'s the tour — feedback welcome',
-      body:  'The button on the right flips light ↔ dark; preference persists across refreshes. The dashboard runs fully offline — everything is embedded in the HTML file.<br><br>Found a bug, have an idea, or want to contribute? <a href="https://github.com/keithbinkly/claude-usage-dashboard/issues" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">Open an issue on GitHub</a> (PRs welcome) or reach out on <a href="https://www.linkedin.com/in/keithbinkly" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">LinkedIn</a>.',
+      body:  'The dashboard runs fully offline — everything is embedded in the HTML file.<br><br>Found a bug, have an idea, or want to contribute? <a href="https://github.com/keithbinkly/claude-usage-dashboard/issues" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">Open an issue on GitHub</a> (PRs welcome) or reach out on <a href="https://www.linkedin.com/in/keithbinkly" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">LinkedIn</a>.',
       target: '#theme-toggle',
       placement: 'bottom',
       pad: 8,
@@ -7739,17 +8032,18 @@
     if (demoCleanup) { try { demoCleanup(); } catch (_) {} demoCleanup = null; }
   }
   // cycleRibbon: dispatches synthetic mouseover/mouseout on each
-  // .ribbon-seg (tokens row only — first half of segments) to trigger
+  // .ribbon-seg (tokens row only, selected by shared row y) to trigger
   // the existing cross-filter that brightens the segment + highlights
   // the matching series in the column chart via _heavyTrendChart
   // dispatchAction. Falls through gracefully if segments aren't drawn.
   function startRibbonDemo() {
     const all = Array.from(document.querySelectorAll('#heavy-ribbon .ribbon-seg'));
     if (!all.length) return null;
-    const half = Math.max(1, Math.floor(all.length / 2));
-    // Tokens row only (one beat per series, not two — turns row mirrors the
-    // same series and would double up). Hit every series in order.
-    const cycle = all.slice(0, half);
+    // Tokens row only, progressing band by band. Segs are interleaved
+    // tok/turn per band in DOM order, so slice(0, half) is WRONG — select
+    // by row instead: every token rect shares the first rect's y.
+    const tokRowY = all[0].getAttribute('y');
+    const cycle = all.filter(el => el.getAttribute('y') === tokRowY);
     let i = 0, last = null;
     const fire = (el, type) => {
       try { el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true })); }
@@ -7782,7 +8076,68 @@
     const id = setInterval(tick, 1400);      // ~1.4s per tile, easy to follow
     return () => { clearInterval(id); };
   }
-  const DEMO_RUNNERS = { cycleRibbon: startRibbonDemo, cycleKpiTiles: startKpiTilesDemo };
+  // Granularity peek: flip Day → Week once so the history chart visibly
+  // re-aggregates. Restore the user's original granularity on cleanup.
+  function startGranularityDemo() {
+    const wk = document.querySelector('.granularity-toggle button[data-granularity="week"]');
+    if (!wk) return null;
+    const orig = document.querySelector('.granularity-toggle button.active');
+    let fired = false;
+    const t = setTimeout(() => { if (!wk.classList.contains('active')) { wk.click(); fired = true; } }, 900);
+    return () => { clearTimeout(t); if (fired && orig && orig !== wk) orig.click(); };
+  }
+  // Theme peek: flip the data-theme attribute directly — NEVER click
+  // #theme-toggle (its handler writes localStorage + location.reload(),
+  // which would kill the tour). Pure visual preview; restores on cleanup.
+  function startThemeDemo() {
+    const root = document.documentElement;
+    const wasLight = root.getAttribute('data-theme') === 'light';
+    let flipped = false;
+    const setFlipped = (on) => {
+      const toLight = on ? !wasLight : wasLight;
+      if (toLight) root.setAttribute('data-theme', 'light');
+      else root.removeAttribute('data-theme');
+      flipped = on;
+    };
+    const t1 = setTimeout(() => setFlipped(true), 700);
+    const t2 = setTimeout(() => setFlipped(false), 2600);
+    return () => { clearTimeout(t1); clearTimeout(t2); if (flipped) setFlipped(false); };
+  }
+  // Trend toggle peek: switch Tokens → Turns, then Share → Level, and
+  // restore both settings when the step changes.
+  function startTrendTogglesDemo() {
+    const turns = document.querySelector('.heavy-trend-toggles button[data-trend-metric="turns"]');
+    const level = document.querySelector('.heavy-trend-toggles button[data-trend-scale="level"]');
+    if (!turns || !level) return null;
+    const origMetric = document.querySelector('.heavy-trend-toggles button[data-trend-metric].active');
+    const origScale  = document.querySelector('.heavy-trend-toggles button[data-trend-scale].active');
+    const fired = [];
+    const t1 = setTimeout(() => { if (!turns.classList.contains('active')) { turns.click(); fired.push('m'); } }, 900);
+    const t2 = setTimeout(() => { if (!level.classList.contains('active')) { level.click(); fired.push('s'); } }, 2400);
+    return () => {
+      clearTimeout(t1); clearTimeout(t2);
+      if (fired.includes('m') && origMetric && origMetric !== turns) origMetric.click();
+      if (fired.includes('s') && origScale  && origScale  !== level) origScale.click();
+    };
+  }
+  // CSV preview peek: open the preview, then auto-dismiss it so the
+  // overlay never blocks later tour clicks.
+  function startCsvPreviewDemo() {
+    const btn = document.getElementById('download-btn');
+    if (!btn) return null;
+    const close = () => { const x = document.querySelector('.csv-preview-overlay.open .csv-preview-close'); if (x) x.click(); };
+    const t1 = setTimeout(() => btn.click(), 700);
+    const t2 = setTimeout(close, 4600);
+    return () => { clearTimeout(t1); clearTimeout(t2); close(); };
+  }
+  const DEMO_RUNNERS = {
+    cycleRibbon: startRibbonDemo,
+    cycleKpiTiles: startKpiTilesDemo,
+    flipTheme: startThemeDemo,
+    granWeekly: startGranularityDemo,
+    cycleTrendToggles: startTrendTogglesDemo,
+    openCsvPreview: startCsvPreviewDemo,
+  };
 
   // ── Show step ──────────────────────────────────────────────────────────
   // Card persists across steps — no fade. Content swaps live, the highlight
@@ -7794,7 +8149,10 @@
 
     cur = Math.max(0, Math.min(STEPS.length - 1, idx));
     const s = STEPS[cur];
-    const el = s.target ? document.querySelector(s.target) : null;
+    const els = (s.targets || [s.target])
+      .filter(Boolean)
+      .map(selector => document.querySelector(selector))
+      .filter(Boolean);
 
     // Chrome updates immediately
     nextBtn.classList.toggle('t-primary', true);
@@ -7808,7 +8166,7 @@
     nextBtn.textContent = cur === STEPS.length - 1 ? 'Done ✓' : 'Next →';
     pop.classList.remove('t-hidden');
 
-    if (!el) {
+    if (!els.length) {
       // Centered modal step — no spotlight
       hl.classList.add('t-hidden');
       requestAnimationFrame(() => placePop(null, s.cardAnchor));
@@ -7818,13 +8176,39 @@
     // Scroll target into view, then glide the highlight to its new rect.
     // The card repositions only when its cardAnchor changes (or on first
     // step). Inheriting steps reuse the stored coords for true static.
+    const scrollRects = els.map(el => ({ el, rect: el.getBoundingClientRect() }));
+    const scrollEl = (scrollRects.find(({ rect }) => rect.width !== 0 && rect.height !== 0) || scrollRects[0]).el;
     if (isMobile()) {
-      scrollTargetIntoViewMobile(el);
+      scrollTargetIntoViewMobile(scrollEl);
     } else {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      scrollEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     setTimeout(() => {
-      const r = el.getBoundingClientRect();
+      // Ignore display:contents/hidden targets so zero-size boxes cannot collapse the spotlight.
+      const rects = els
+        .map(el => el.getBoundingClientRect())
+        .filter(rect => rect.width !== 0 && rect.height !== 0);
+      if (!rects.length) {
+        hl.classList.add('t-hidden');
+        requestAnimationFrame(() => placePop(null, s.cardAnchor));
+        return;
+      }
+      const r = rects.length === 1 ? rects[0] : rects.slice(1).reduce((acc, rect) => {
+        acc.top = Math.min(acc.top, rect.top);
+        acc.left = Math.min(acc.left, rect.left);
+        acc.bottom = Math.max(acc.bottom, rect.bottom);
+        acc.right = Math.max(acc.right, rect.right);
+        acc.width = acc.right - acc.left;
+        acc.height = acc.bottom - acc.top;
+        return acc;
+      }, {
+        top: rects[0].top,
+        left: rects[0].left,
+        bottom: rects[0].bottom,
+        right: rects[0].right,
+        width: rects[0].width,
+        height: rects[0].height,
+      });
       const p = s.pad || 6;
       const hlR = { top: r.top - p, left: r.left - p, bottom: r.bottom + p, right: r.right + p, width: r.width + p*2, height: r.height + p*2 };
       hl.style.top    = hlR.top    + 'px';

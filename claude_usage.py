@@ -33,9 +33,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-# ─── Model price table (USD per million tokens, Anthropic list prices) ───
+# ─── Model price table (USD per million tokens, Anthropic list prices — Opus 4.5+ era) ───
 MODEL_RATES: dict[str, dict[str, float]] = {
-    "opus":   {"input": 15.0, "output": 75.0, "cache_read": 1.50, "cache_write": 18.75},
+    "opus":   {"input": 5.0, "output": 25.0, "cache_read": 0.50, "cache_write": 6.25},
+    "fable":  {"input": 10.0, "output": 50.0, "cache_read": 1.00, "cache_write": 12.50},
     "sonnet": {"input":  3.0, "output": 15.0, "cache_read": 0.30, "cache_write":  3.75},
     "haiku":  {"input":  1.0, "output":  5.0, "cache_read": 0.10, "cache_write":  1.25},
 }
@@ -55,6 +56,8 @@ def short_model(model: str | None) -> str:
     if not model:
         return "unknown"
     m = model.lower()
+    if "fable" in m or "mythos" in m:
+        return "fable"
     if "opus" in m:
         return "opus"
     if "sonnet" in m:
@@ -120,7 +123,7 @@ class Turn:
     output_t: int
     cache_read: int
     cache_write: int
-    model: str        # "opus" | "sonnet" | "haiku" | "unknown"
+    model: str        # "opus" | "fable" | "sonnet" | "haiku" | "unknown"
     sid: str          # session id (first 8 chars)
     stype: str        # "interactive" | "headless"
     side: int         # 1 if sidechain (subagent), else 0
@@ -218,7 +221,7 @@ def parse_session(path: Path, cutoff_ms: int) -> list[Turn]:
             cache_write=record["cw"],
             model=short_model(record["model_full"]),
             sid=session_id,
-            stype="headless" if entrypoint == "sdk-cli" else "interactive",
+            stype="headless" if entrypoint in ("sdk-cli", "sdk-ts") else "interactive",
             side=record["side"],
             cost=cost_for_usage(record["usage"], record["model_full"]),
         ))
@@ -259,6 +262,7 @@ def collect(days: int) -> Dataset:
                 # only the final (complete) count is counted.
                 file_seen: dict[str, dict] = {}
                 file_no_id: list[dict] = []
+                file_entrypoint: str = ""
 
                 for evt in iter_jsonl(f):
                     if evt.get("type") != "assistant":
@@ -278,6 +282,8 @@ def collect(days: int) -> Dataset:
                     if dt is None:
                         continue
                     model_full = msg.get("model", "") or ""
+                    if not file_entrypoint:
+                        file_entrypoint = evt.get("entrypoint", "") or ""
                     record = {
                         "ts_ms": int(dt.timestamp() * 1000),
                         "cost": cost_for_usage(usage, model_full),
@@ -316,7 +322,7 @@ def collect(days: int) -> Dataset:
                             "turns": 0, "tokens": 0, "cost": 0.0,
                             "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
                             "ctx_sum": 0,  # for avg ctx
-                            "opus": 0, "sonnet": 0, "haiku": 0,  # turn counts per model
+                            "opus": 0, "fable": 0, "sonnet": 0, "haiku": 0,  # turn counts per model
                             # Heavy-turn ctx buckets — count of turns AND
                             # sum of ctx tokens for turns whose context
                             # exceeds each threshold. The `ctx_sum_gt_*`
@@ -329,21 +335,24 @@ def collect(days: int) -> Dataset:
                             # Per-model cost + tokens — enables counterfactual
                             # estimates like "what if these Opus turns ran on
                             # Sonnet" for the efficiency levers card.
-                            "cost_opus": 0.0, "cost_sonnet": 0.0, "cost_haiku": 0.0,
-                            "tokens_opus": 0, "tokens_sonnet": 0, "tokens_haiku": 0,
-                            # Cross-tab: Opus tokens by context tier. Feeds
-                            # the efficiency mix bar so each Opus slice
+                            "cost_opus": 0.0, "cost_fable": 0.0,
+                            "cost_sonnet": 0.0, "cost_haiku": 0.0,
+                            "tokens_opus": 0, "tokens_fable": 0,
+                            "tokens_sonnet": 0, "tokens_haiku": 0,
+                            # Cross-tab: tokens by context tier for
+                            # big-context models (Opus + Fable). Feeds
+                            # the efficiency mix bar so each slice
                             # visually separates <200K / 200-500K /
                             # 500-800K / >800K context-size bands.
                             "tokens_opus_u200k": 0,
                             "tokens_opus_200_500k": 0,
                             "tokens_opus_500_800k": 0,
                             "tokens_opus_o800k": 0,
-                            # Parallel turn counts for each Opus context
+                            # Parallel turn counts for each big-context
                             # tier — needed for the heavy-turn ribbon's
                             # lift × calculation (tokens% / turns%) per
-                            # band, isolated to Opus only since Opus is
-                            # where the 1M-tier pricing problem lives.
+                            # band; bands cover big-context models
+                            # (Opus + Fable).
                             "turns_opus_u200k": 0,
                             "turns_opus_200_500k": 0,
                             "turns_opus_500_800k": 0,
@@ -360,9 +369,14 @@ def collect(days: int) -> Dataset:
                             # for reasoning."
                             "cost_if_sonnet": 0.0,
                             "cost_if_sonnet_gt_200k": 0.0,
+                            "tokens_headless": 0,
+                            "turns_headless": 0,
                         }
                         daily[day] = d
                     d["turns"] += 1
+                    if file_entrypoint in ("sdk-cli", "sdk-ts"):
+                        d["tokens_headless"] += total_tokens
+                        d["turns_headless"] += 1
                     d["tokens"] += total_tokens
                     d["cost"] += cost
                     d["input"] += inp
@@ -382,14 +396,29 @@ def collect(days: int) -> Dataset:
                     if ctx_size > 800_000:
                         d["ctx_gt_800k"] += 1
                         d["ctx_sum_gt_800k"] += ctx_size
-                    m = model_full.lower()
-                    if "opus" in m:
+                    model = short_model(model_full)
+                    if model == "opus":
                         d["opus"] += 1
                         d["cost_opus"] += cost
                         d["tokens_opus"] += total_tokens
-                        # Opus-by-ctx-tier cross-tab — both turn count
-                        # and token sum, so the heavy-turn ribbon can
-                        # compute lift × per band Opus-only.
+                    elif model == "fable":
+                        d["fable"] += 1
+                        d["cost_fable"] += cost
+                        d["tokens_fable"] += total_tokens
+                    elif model == "sonnet":
+                        d["sonnet"] += 1
+                        d["cost_sonnet"] += cost
+                        d["tokens_sonnet"] += total_tokens
+                    elif model == "haiku":
+                        d["haiku"] += 1
+                        d["cost_haiku"] += cost
+                        d["tokens_haiku"] += total_tokens
+                    # Big-context model ctx-tier cross-tab — both turn
+                    # count and token sum, so the heavy-turn ribbon can
+                    # compute lift × per band. Field names stay
+                    # tokens_opus_* / turns_opus_* for schema stability.
+                    # bands cover big-context models (Opus + Fable).
+                    if model in ("opus", "fable"):
                         if ctx_size <= 200_000:
                             d["tokens_opus_u200k"] += total_tokens
                             d["turns_opus_u200k"] += 1
@@ -402,14 +431,6 @@ def collect(days: int) -> Dataset:
                         else:
                             d["tokens_opus_o800k"] += total_tokens
                             d["turns_opus_o800k"] += 1
-                    elif "sonnet" in m:
-                        d["sonnet"] += 1
-                        d["cost_sonnet"] += cost
-                        d["tokens_sonnet"] += total_tokens
-                    elif "haiku" in m:
-                        d["haiku"] += 1
-                        d["cost_haiku"] += cost
-                        d["tokens_haiku"] += total_tokens
                     # Shadow cost at Sonnet rates. Replay the same usage
                     # dict with Sonnet pricing to answer "what if this turn
                     # had run on Sonnet?" Ignores quality differences.
@@ -481,6 +502,7 @@ def collect(days: int) -> Dataset:
             "cost_per_turn": round(d["cost"] / turns_count, 4) if turns_count else 0,
             "cache_hit_rate": round(d["cache_read"] / denom, 4),
             "opus": d["opus"],
+            "fable": d["fable"],
             "sonnet": d["sonnet"],
             "haiku": d["haiku"],
             "turns_ctx_gt_200k": d["ctx_gt_200k"],
@@ -503,9 +525,11 @@ def collect(days: int) -> Dataset:
             # Per-model + per-context-tier cost/tokens for the efficiency
             # model (counterfactuals "all Sonnet" + "compact <200K").
             "cost_opus": round(d["cost_opus"], 4),
+            "cost_fable": round(d["cost_fable"], 4),
             "cost_sonnet": round(d["cost_sonnet"], 4),
             "cost_haiku": round(d["cost_haiku"], 4),
             "tokens_opus": d["tokens_opus"],
+            "tokens_fable": d["tokens_fable"],
             "tokens_sonnet": d["tokens_sonnet"],
             "tokens_haiku": d["tokens_haiku"],
             "cost_gt_200k": round(d["cost_gt_200k"], 4),
@@ -520,12 +544,77 @@ def collect(days: int) -> Dataset:
             "turns_opus_200_500k":  d["turns_opus_200_500k"],
             "turns_opus_500_800k":  d["turns_opus_500_800k"],
             "turns_opus_o800k":     d["turns_opus_o800k"],
+            "turns_fable":          d["fable"],
             "turns_sonnet":         d["sonnet"],
             "turns_haiku":          d["haiku"],
+            "tokens_headless":      d.get("tokens_headless", 0),
+            "turns_headless":       d.get("turns_headless", 0),
         })
     ds.daily_stats = daily_list  # type: ignore[attr-defined]
     ds.first_1m_ms = ds_first_1m  # type: ignore[attr-defined]
     return ds
+
+
+def backfill_daily_from_csv(ds, csv_path):
+    """Merge a previously-exported daily_stats CSV into ds.daily_stats.
+
+    Claude Code prunes raw transcripts after ~30 days, so the live scan only
+    sees recent history. The dashboard's "Download CSV" exports daily_stats
+    verbatim; re-importing restores the pruned daily trend/total history.
+    Live data wins: a CSV row is added only for a PT-date not already present.
+    Returns the number of days backfilled.
+    """
+    import csv as _csv
+    daily = getattr(ds, "daily_stats", []) or []
+    schema = list(daily[0].keys()) if daily else None
+
+    def _coerce(col, raw):
+        if col == "day":
+            return raw
+        if raw is None or raw == "":
+            return 0
+        if col.startswith("pct_") or col.startswith("cost") or col == "cache_hit_rate":
+            try:
+                return float(raw)
+            except ValueError:
+                return 0.0
+        try:
+            return int(raw)
+        except ValueError:
+            try:
+                return int(float(raw))
+            except ValueError:
+                return 0
+
+    existing = {r.get("day") for r in daily}
+    added = 0
+    with csv_path.open(newline="", encoding="utf-8") as fh:
+        reader = _csv.DictReader(fh)
+        if schema is None and reader.fieldnames:
+            schema = list(reader.fieldnames)
+        for row in reader:
+            day = row.get("day")
+            if not day or day in existing:
+                continue
+            cols = schema or list(row.keys())
+            merged = {c: _coerce(c, row.get(c, "")) for c in cols}
+            merged["day"] = day
+            daily.append(merged)
+            existing.add(day)
+            added += 1
+
+    if added:
+        daily.sort(key=lambda r: r.get("day", ""))
+        ds.daily_stats = daily  # type: ignore[attr-defined]
+        try:
+            earliest = daily[0]["day"]
+            dt = datetime.strptime(earliest, "%Y-%m-%d").replace(tzinfo=pt_tz())
+            ems = int(dt.timestamp() * 1000)
+            cur = getattr(ds, "first_ms", 0) or 0
+            ds.first_ms = min(cur, ems) if cur else ems
+        except (ValueError, KeyError):
+            pass
+    return added
 
 
 RATE_LIMIT_RESET_RE = re.compile(
@@ -843,7 +932,7 @@ def aggregate_sessions(
                 "first_ts_ms": t.ts_ms,
                 "last_ts_ms": t.ts_ms,
                 # Model usage counts — dominant model wins for display
-                "model_counts": {"opus": 0, "sonnet": 0, "haiku": 0, "unknown": 0},
+                "model_counts": {"opus": 0, "fable": 0, "sonnet": 0, "haiku": 0, "unknown": 0},
                 "stype": t.stype,
             }
             buckets[t.sid] = b
@@ -937,7 +1026,7 @@ def compute_efficiency_model(daily_stats: list[dict], lookback_days: int = 7) ->
           - compact_below_200k: $/Mtok if heavy-ctx turns (>200K) avoided
             the 1M-tier premium (approximated as ~1.5x).
           - both: applying both levers simultaneously.
-      - mix: current opus/sonnet/haiku token share (for UI).
+      - mix: current opus/fable/sonnet/haiku token share (for UI).
       - heavy_ctx_share: fraction of tokens from turns with ctx > 200K.
       - lookback_days
     """
@@ -993,6 +1082,7 @@ def compute_efficiency_model(daily_stats: list[dict], lookback_days: int = 7) ->
 
     # Mix shares (by tokens)
     tokens_opus = sum_("tokens_opus")
+    tokens_fable = sum_("tokens_fable")
     tokens_sonnet = sum_("tokens_sonnet")
     tokens_haiku = sum_("tokens_haiku")
     tokens_gt_200k = sum_("tokens_gt_200k")
@@ -1018,6 +1108,7 @@ def compute_efficiency_model(daily_stats: list[dict], lookback_days: int = 7) ->
         },
         "mix": {
             "opus_share": tokens_opus / total_tokens if total_tokens else 0,
+            "fable_share": tokens_fable / total_tokens if total_tokens else 0,
             "sonnet_share": tokens_sonnet / total_tokens if total_tokens else 0,
             "haiku_share": tokens_haiku / total_tokens if total_tokens else 0,
         },
@@ -1110,12 +1201,13 @@ def compute_heavy_bucket_summary(daily_stats: list[dict]) -> dict:
             "overrep_recent": overrep,
         }
 
-    # ── Opus-only by-band breakdown for the 5-tier ribbon ───────────
+    # ── Big-context by-band breakdown for the 5-tier ribbon ─────────
     # The all-models bands above mix Sonnet/Haiku into <200K (which
     # distorts the lift × narrative since Sonnet has flat pricing
-    # regardless of context). Below we compute Opus-only shares per
-    # band (as a fraction of total Opus turns/tokens for the recent
-    # window) and Sonnet/Haiku totals as flat single-segment shares.
+    # regardless of context). Below we compute Opus+Fable shares per
+    # band (as a fraction of total big-context model turns/tokens for
+    # the recent window) and Sonnet/Haiku totals as flat single-segment
+    # shares. The field names stay `opus_*` for schema stability.
     def _opus_share(field: str) -> float:
         if not recent:
             return 0.0
@@ -1134,12 +1226,14 @@ def compute_heavy_bucket_summary(daily_stats: list[dict]) -> dict:
         return round(band_total / opus_total, 4)
 
     # Activity totals across recent — used to size each model's share
-    # of all activity (Opus+Sonnet+Haiku) so the ribbon segments are
+    # of all activity (Opus+Fable+Sonnet+Haiku) so the ribbon segments are
     # proportional across model bands too.
     def _sum(field: str) -> int:
         return sum(d.get(field, 0) for d in recent)
     total_turns = _sum("turns")
     total_tokens_all = sum(d.get("tokens", 0) for d in recent)
+    fable_turn_share = round(_sum("turns_fable") / total_turns, 4) if total_turns else 0
+    fable_token_share = round(_sum("tokens_fable") / total_tokens_all, 4) if total_tokens_all else 0
     sonnet_turn_share = round(_sum("turns_sonnet") / total_turns, 4) if total_turns else 0
     sonnet_token_share = round(_sum("tokens_sonnet") / total_tokens_all, 4) if total_tokens_all else 0
     haiku_turn_share = round(_sum("turns_haiku") / total_turns, 4) if total_turns else 0
@@ -1153,8 +1247,10 @@ def compute_heavy_bucket_summary(daily_stats: list[dict]) -> dict:
     opus_token_share_total = round(opus_total_tokens / total_tokens_all, 4) if total_tokens_all else 0
 
     # Per-band shares of TOTAL activity (so ribbon segments add to
-    # ~100% across all 5 bands: 4 Opus context bands + 1 Sonnet band,
-    # with Haiku optionally surfaced if material).
+    # ~100% across all 5 bands: 4 Opus+Fable context bands + 1 Sonnet band,
+    # with Haiku optionally surfaced if material). Fable is also exposed
+    # separately for per-model summaries, but is not added as another
+    # stacked band because that would double-count the Opus+Fable tiers.
     out["by_model"] = {
         "opus_u200k": {
             "turn_share":  round(_sum("turns_opus_u200k") / total_turns, 4) if total_turns else 0,
@@ -1175,6 +1271,10 @@ def compute_heavy_bucket_summary(daily_stats: list[dict]) -> dict:
         "sonnet": {
             "turn_share":  sonnet_turn_share,
             "token_share": sonnet_token_share,
+        },
+        "fable": {
+            "turn_share":  fable_turn_share,
+            "token_share": fable_token_share,
         },
         "haiku": {
             "turn_share":  haiku_turn_share,
@@ -1730,6 +1830,7 @@ def to_json(ds: Dataset) -> str:
     daily_stats = getattr(ds, "daily_stats", [])
     payload = {
         "generated_at": ds.generated_at,
+        "is_sample": getattr(ds, "is_sample", False),
         "lookback_days": ds.lookback_days,
         "turn_count": len(ds.turns),
         "first_ms": ds.first_ms,
@@ -1849,17 +1950,21 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
             daily[day] = {
                 "turns": 0, "tokens": 0, "cost": 0.0,
                 "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
-                "ctx_sum": 0, "opus": 0, "sonnet": 0, "haiku": 0,
+                "ctx_sum": 0, "opus": 0, "fable": 0, "sonnet": 0, "haiku": 0,
                 "ctx_gt_200k": 0, "ctx_gt_500k": 0, "ctx_gt_800k": 0,
                 "ctx_sum_gt_200k": 0, "ctx_sum_gt_500k": 0, "ctx_sum_gt_800k": 0,
-                "cost_opus": 0.0, "cost_sonnet": 0.0, "cost_haiku": 0.0,
-                "tokens_opus": 0, "tokens_sonnet": 0, "tokens_haiku": 0,
+                "cost_opus": 0.0, "cost_fable": 0.0,
+                "cost_sonnet": 0.0, "cost_haiku": 0.0,
+                "tokens_opus": 0, "tokens_fable": 0,
+                "tokens_sonnet": 0, "tokens_haiku": 0,
                 "tokens_opus_u200k": 0, "tokens_opus_200_500k": 0,
                 "tokens_opus_500_800k": 0, "tokens_opus_o800k": 0,
                 "turns_opus_u200k": 0, "turns_opus_200_500k": 0,
                 "turns_opus_500_800k": 0, "turns_opus_o800k": 0,
                 "cost_gt_200k": 0.0, "tokens_gt_200k": 0,
                 "cost_if_sonnet": 0.0, "cost_if_sonnet_gt_200k": 0.0,
+                "tokens_headless": 0,
+                "turns_headless": 0,
             }
         d = daily[day]
         total_tok = t.input_t + t.output_t + t.cache_read + t.cache_write
@@ -1867,6 +1972,9 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
         cif = (t.input_t * sr["input"] + t.output_t * sr["output"] +
                t.cache_read * sr["cache_read"] + t.cache_write * sr["cache_write"]) / 1_000_000
         d["turns"] += 1; d["tokens"] += total_tok; d["cost"] += t.cost
+        if t.stype == "headless":
+            d["tokens_headless"] += total_tok
+            d["turns_headless"] += 1
         d["input"] += t.input_t; d["output"] += t.output_t
         d["cache_read"] += t.cache_read; d["cache_write"] += t.cache_write
         d["ctx_sum"] += t.ctx; d["cost_if_sonnet"] += cif
@@ -1880,13 +1988,18 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
             d["ctx_gt_800k"] += 1; d["ctx_sum_gt_800k"] += t.ctx
         if t.model == "opus":
             d["opus"] += 1; d["cost_opus"] += t.cost; d["tokens_opus"] += total_tok
-            tier = ("u200k" if t.ctx <= 200_000 else "200_500k" if t.ctx <= 500_000
-                    else "500_800k" if t.ctx <= 800_000 else "o800k")
-            d[f"tokens_opus_{tier}"] += total_tok; d[f"turns_opus_{tier}"] += 1
+        elif t.model == "fable":
+            d["fable"] += 1; d["cost_fable"] += t.cost; d["tokens_fable"] += total_tok
         elif t.model == "sonnet":
             d["sonnet"] += 1; d["cost_sonnet"] += t.cost; d["tokens_sonnet"] += total_tok
         elif t.model == "haiku":
             d["haiku"] += 1; d["cost_haiku"] += t.cost; d["tokens_haiku"] += total_tok
+        if t.model in ("opus", "fable"):
+            # bands cover big-context models (Opus + Fable).
+            # Field names stay tokens_opus_* / turns_opus_* for schema stability.
+            tier = ("u200k" if t.ctx <= 200_000 else "200_500k" if t.ctx <= 500_000
+                    else "500_800k" if t.ctx <= 800_000 else "o800k")
+            d[f"tokens_opus_{tier}"] += total_tok; d[f"turns_opus_{tier}"] += 1
     result = []
     for day in sorted(daily.keys()):
         d = daily[day]; n = d["turns"]
@@ -1900,7 +2013,7 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
             "tokens_per_turn": round(d["tokens"] / n) if n else 0,
             "cost_per_turn": round(d["cost"] / n, 4) if n else 0,
             "cache_hit_rate": round(d["cache_read"] / denom, 4),
-            "opus": d["opus"], "sonnet": d["sonnet"], "haiku": d["haiku"],
+            "opus": d["opus"], "fable": d["fable"], "sonnet": d["sonnet"], "haiku": d["haiku"],
             "turns_ctx_gt_200k": d["ctx_gt_200k"], "turns_ctx_gt_500k": d["ctx_gt_500k"],
             "turns_ctx_gt_800k": d["ctx_gt_800k"],
             "pct_ctx_gt_200k": round(d["ctx_gt_200k"] / n, 4) if n else 0,
@@ -1911,9 +2024,11 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
             "pct_tokens_gt_200k": round(d["ctx_sum_gt_200k"] / cs, 4),
             "pct_tokens_gt_500k": round(d["ctx_sum_gt_500k"] / cs, 4),
             "pct_tokens_gt_800k": round(d["ctx_sum_gt_800k"] / cs, 4),
-            "cost_opus": round(d["cost_opus"], 4), "cost_sonnet": round(d["cost_sonnet"], 4),
+            "cost_opus": round(d["cost_opus"], 4), "cost_fable": round(d["cost_fable"], 4),
+            "cost_sonnet": round(d["cost_sonnet"], 4),
             "cost_haiku": round(d["cost_haiku"], 4),
-            "tokens_opus": d["tokens_opus"], "tokens_sonnet": d["tokens_sonnet"],
+            "tokens_opus": d["tokens_opus"], "tokens_fable": d["tokens_fable"],
+            "tokens_sonnet": d["tokens_sonnet"],
             "tokens_haiku": d["tokens_haiku"],
             "cost_gt_200k": round(d["cost_gt_200k"], 4), "tokens_gt_200k": d["tokens_gt_200k"],
             "cost_if_sonnet": round(d["cost_if_sonnet"], 4),
@@ -1926,7 +2041,9 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
             "turns_opus_200_500k": d["turns_opus_200_500k"],
             "turns_opus_500_800k": d["turns_opus_500_800k"],
             "turns_opus_o800k": d["turns_opus_o800k"],
-            "turns_sonnet": d["sonnet"], "turns_haiku": d["haiku"],
+            "turns_fable": d["fable"], "turns_sonnet": d["sonnet"], "turns_haiku": d["haiku"],
+            "tokens_headless": d["tokens_headless"],
+            "turns_headless": d["turns_headless"],
         })
     return result
 
@@ -2025,10 +2142,13 @@ def generate_sample_dataset(days: int = 90) -> Dataset:
             for turn_idx in range(n_in_sess):
                 t_cursor += rng.randint(90_000, 720_000)  # 1.5–12 min per turn
 
-                r = rng.random()
-                model = "opus" if r < opus_f else ("sonnet" if r < opus_f + son_f else "haiku")
-
-                if heavy_f > 0 and rng.random() < heavy_f:
+                is_heavy = heavy_f > 0 and rng.random() < heavy_f
+                if is_heavy:
+                    # Heavy-ctx turns are overwhelmingly Opus in real usage.
+                    # Decoupling model from ctx was causing Sonnet to absorb
+                    # large contexts and produce a near-1:1 token/turn ratio.
+                    hm = rng.random()
+                    model = "opus" if hm < 0.88 else ("sonnet" if hm < 0.96 else "haiku")
                     ctx = rng.choices(
                         [rng.randint(200_001, 499_999),
                          rng.randint(500_000, 799_999),
@@ -2036,7 +2156,15 @@ def generate_sample_dataset(days: int = 90) -> Dataset:
                         weights=[0.45, 0.32, 0.23],
                     )[0]
                 else:
-                    ctx = rng.randint(4_000, min(ctx_cap, 185_000))
+                    r = rng.random()
+                    model = "opus" if r < opus_f else ("sonnet" if r < opus_f + son_f else "haiku")
+                    # Sonnet non-heavy turns stay short — realistic ceiling ~50K ctx.
+                    # This ensures Sonnet's token/turn ratio looks natural (varied,
+                    # not near 1:1) and heavy Opus bins dominate token share.
+                    if model == "sonnet":
+                        ctx = rng.randint(4_000, min(50_000, ctx_cap))
+                    else:
+                        ctx = rng.randint(4_000, min(ctx_cap, 185_000))
 
                 if turn_idx == 0:
                     input_t = max(3_000, int(ctx * rng.uniform(0.15, 0.28)))
@@ -2102,6 +2230,8 @@ def main() -> None:
     ap.add_argument("--json-only", action="store_true", help="Write usage data as JSON instead of HTML")
     ap.add_argument("--sample", action="store_true",
                     help="Generate from synthetic demo data instead of ~/.claude/ (no personal data)")
+    ap.add_argument("--backfill-csv", type=Path, default=None,
+                    help="Merge a previously-exported daily_stats CSV to restore pruned history.")
     args = ap.parse_args()
 
     if args.sample:
@@ -2116,6 +2246,13 @@ def main() -> None:
     if not ds.turns:
         print("No turns found in the lookback window. Nothing to render.", file=sys.stderr)
         sys.exit(1)
+
+    if args.backfill_csv and not args.sample:
+        if not args.backfill_csv.exists():
+            print(f"--backfill-csv: file not found: {args.backfill_csv}", file=sys.stderr)
+            sys.exit(1)
+        _n = backfill_daily_from_csv(ds, args.backfill_csv)
+        print(f"backfilled {_n} historical days from {args.backfill_csv}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
