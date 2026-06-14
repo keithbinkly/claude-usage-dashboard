@@ -6666,10 +6666,19 @@
         const _rbH = (window.innerWidth >= 1201 && _trendH > 0)
           ? _trendH
           : Math.round(_rbW * 320 / 1000);
-        /* Dynamic viewBox height: at natural aspect ratio viewBoxH=320.
-           When taller, viewBoxH>320 so bars, ribbons, and text all scale
-           proportionally — no distortion from preserveAspectRatio:none. */
-        const viewBoxH = Math.max(320, Math.round(_rbH / _rbW * 1000));
+        /* Dynamic viewBox height: MUST track the element's true height/width
+           ratio so preserveAspectRatio "...meet" fills the box exactly with
+           no horizontal letterboxing. The old Math.max(320,...) floor pinned
+           the viewBox to a 1000×320 (3.125:1) minimum; whenever the rendered
+           row was wider/shorter than that — e.g. the shorter 'bands' ribbon at
+           ≥~1500px, whose multi-row legend trims the trend row it mirrors —
+           `meet` scaled the content down to fit the *height* and centered it,
+           shrinking the bars off both container edges and breaking alignment
+           with the trend chart below. Tracking the real ratio makes the bars
+           span full width identically in both 'bands' and 'headless'. Bars,
+           ribbons, and text all scale uniformly (factor _rbW/1000), so text
+           stays the same visual size regardless of row height. */
+        const viewBoxH = Math.max(1, Math.round(_rbH / _rbW * 1000));
         svg.setAttribute('viewBox', '0 0 1000 ' + viewBoxH);
         svg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
         svg.style.cssText = 'display:block;width:100%;height:' + _rbH + 'px;max-width:100%;';
