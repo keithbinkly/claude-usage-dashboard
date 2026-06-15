@@ -2103,13 +2103,13 @@
   }
   .heavy-pane-controls {
     display: flex;
-    /* Stack the filter groups beside the legend. column-reverse puts GROUP on
-       top and RANGE on the bottom, so RANGE lines up with the legend BAR
-       (toolbar is bottom-aligned). Narrow column frees width for the legend. */
-    flex-direction: column-reverse;
-    align-items: flex-end;
-    justify-content: flex-start;
-    gap: 8px;
+    /* Days + Group sit SIDE BY SIDE on one row to the right of the legend, so
+       the whole toolbar is a single row (reclaims the second toggle row for
+       the charts). Bottom-aligned via the toolbar so they ride the legend bar. */
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
     flex: 0 0 auto;
   }
   .heavy-pane-controls .trend-toggle-group {
@@ -2615,9 +2615,10 @@
      moved to the bottom of the chart so it does not crowd this row. */
   .heavy-trend-header {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    flex-direction: row;        /* title + Metric/Scale on ONE row — frees height for the chart below */
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     /* Separator was border-bottom (under the toggles) when this header
        carried a title. Title was dropped → header now contains only the
        toggle row, and the separator visually orphaned beneath it. Flipped
@@ -2641,9 +2642,9 @@
   .heavy-trend-toggles {
     display: flex;
     gap: 14px;
-    align-items: flex-end;
+    align-items: center;
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: flex-end;
     row-gap: 8px;
     /* Hug content — parent column stretches children, which made the tour
        spotlight (and any rect measurement) span the full panel width. */
@@ -2697,12 +2698,12 @@
   .trend-toggle button {
     appearance: none;
     font-family: var(--mono);
-    font-size: var(--fs-xs);
+    font-size: 10px;
     font-weight: 600;
     line-height: 1;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 6px 12px;
+    letter-spacing: 0.04em;
+    padding: 4px 7px;
     background: transparent;
     color: var(--ink-muted);
     border: none;
@@ -3304,11 +3305,11 @@
               <div class="heavy-pane-legend" id="heavy-pane-legend" data-polish="heavy-pane-legend" aria-label="Context bands"></div>
               <div class="heavy-pane-controls" data-polish="heavy-pane-filters" aria-label="Heavy chart scope controls">
                 <div class="trend-toggle-group">
-                  <span class="trend-toggle-group-label">Range</span>
-                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend range">
-                    <button type="button" data-trend-range="7">7d</button>
-                    <button type="button" data-trend-range="30">30d</button>
-                    <button type="button" data-trend-range="90" class="active">90d</button>
+                  <span class="trend-toggle-group-label">Days</span>
+                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend window in days">
+                    <button type="button" data-trend-range="7">7</button>
+                    <button type="button" data-trend-range="30">30</button>
+                    <button type="button" data-trend-range="90" class="active">90</button>
                     <button type="button" data-trend-range="all">All</button>
                   </div>
                 </div>
