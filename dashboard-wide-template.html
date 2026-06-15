@@ -2080,7 +2080,13 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 14px;
-    flex: 1 1 auto;
+    /* Own full-width row so the swatch items always flow HORIZONTALLY.
+       Previously flex:1 1 auto made the legend share one row with the
+       controls and take only leftover width — bands' 6 long labels then
+       wrapped into a tall vertical stack (key + ~5 rows), pushing the
+       ribbon down. Full-width legend + a wrapped toolbar puts controls on
+       their own row and keeps the legend one (or two) horizontal rows. */
+    flex: 1 1 100%;
     min-width: 0;
     font-size: var(--fs-xs);
     color: var(--ink-dim);
@@ -2089,6 +2095,7 @@
   }
   .heavy-pane-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
     gap: 12px 18px;
@@ -2101,7 +2108,9 @@
     align-items: flex-end;
     justify-content: flex-end;
     gap: 12px;
-    flex: 0 0 auto;
+    /* Own full-width row beneath the legend (toolbar wraps), right-aligned
+       so Range/Group stay where they were before the legend went full-width. */
+    flex: 1 1 100%;
     flex-wrap: wrap;
   }
   .heavy-pane-controls .trend-toggle-group {
