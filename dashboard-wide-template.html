@@ -2080,13 +2080,11 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 14px;
-    /* Own full-width row so the swatch items always flow HORIZONTALLY.
-       Previously flex:1 1 auto made the legend share one row with the
-       controls and take only leftover width — bands' 6 long labels then
-       wrapped into a tall vertical stack (key + ~5 rows), pushing the
-       ribbon down. Full-width legend + a wrapped toolbar puts controls on
-       their own row and keeps the legend one (or two) horizontal rows. */
-    flex: 1 1 100%;
+    /* Legend takes the left side and GROWS to fill it. The filters column on
+       the right is vertically stacked (Range over Group), so it's narrow —
+       which leaves the legend enough width to flow its swatches HORIZONTALLY
+       (1–2 rows) instead of the old leftover-width vertical stack. */
+    flex: 1 1 auto;
     min-width: 0;
     font-size: var(--fs-xs);
     color: var(--ink-dim);
@@ -2095,26 +2093,27 @@
   }
   .heavy-pane-toolbar {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    flex-wrap: nowrap;
+    align-items: flex-end;       /* legend bar + Range share a baseline, just above the ribbon */
     justify-content: space-between;
     gap: 12px 18px;
-    padding: 6px 0 10px;
-    border-bottom: 1px solid var(--pane-divider);
-    margin-bottom: 8px;
+    padding: 6px 0 4px;          /* tight — legend sits directly above the ribbon */
+    margin-bottom: 4px;
+    /* divider line removed — it only added margin/visual noise */
   }
   .heavy-pane-controls {
     display: flex;
+    /* Stack the filter groups beside the legend. column-reverse puts GROUP on
+       top and RANGE on the bottom, so RANGE lines up with the legend BAR
+       (toolbar is bottom-aligned). Narrow column frees width for the legend. */
+    flex-direction: column-reverse;
     align-items: flex-end;
-    justify-content: flex-end;
-    gap: 12px;
-    /* Own full-width row beneath the legend (toolbar wraps), right-aligned
-       so Range/Group stay where they were before the legend went full-width. */
-    flex: 1 1 100%;
-    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+    flex: 0 0 auto;
   }
   .heavy-pane-controls .trend-toggle-group {
-    align-items: flex-end;
+    align-items: center;        /* title on the SAME line as its toggle buttons */
   }
   .heavy-pane-legend-label {
     display: inline-flex;
@@ -2129,6 +2128,44 @@
     flex-shrink: 0;
     background: var(--label-color, var(--ink-dim));
   }
+  /* Stacked color-bar legend — contiguous colored segments with the label
+     INSIDE each (token range for Opus·Fable bands; model name for
+     Sonnet/Haiku). An "Opus·Fable" bracket spans the four premium segments. */
+  .heavy-legend-bar {
+    display: flex;
+    align-items: flex-end;     /* bottom-align cells; opus column is taller */
+    flex-wrap: nowrap;
+  }
+  .heavy-legend-opus {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .heavy-legend-bracket-label {
+    text-align: center;
+    font-size: var(--fs-xs);
+    color: var(--ink-dim);
+    line-height: 1.15;
+    margin: 0 0 2px;
+    white-space: nowrap;
+  }
+  .heavy-legend-bracket {
+    height: 4px;
+    border: 1px solid var(--ink-dim);
+    border-bottom: none;       /* ⊓ : top + two side ticks spanning the opus cells */
+    margin-bottom: 3px;
+  }
+  .heavy-legend-cells { display: flex; }
+  .heavy-legend-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
   .heavy-pane-legend-key {
     color: var(--ink-dim);
     text-transform: uppercase;
@@ -2142,15 +2179,16 @@
      reader can tell Metric / Scale / Range apart at a glance. */
   .trend-toggle-group {
     display: inline-flex;
-    flex-direction: column;
-    gap: 4px;
-    align-items: flex-start;
+    flex-direction: row;        /* title sits immediately LEFT of the toggles */
+    gap: 6px;
+    align-items: center;
   }
   .trend-toggle-group-label {
     font: 600 9px/1 var(--mono);
     color: var(--ink-dim);
     letter-spacing: 0.10em;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   /* Heavy-bucket tiles — 3 thresholds side-by-side */
@@ -3263,8 +3301,8 @@
                  so we can drop the inline SVG legend on top of the ribbon
                  SVG — only one legend, in the lower of the two old slots. -->
             <div class="heavy-pane-toolbar">
-              <div class="heavy-pane-legend" id="heavy-pane-legend" aria-label="Context bands"></div>
-              <div class="heavy-pane-controls" aria-label="Heavy chart scope controls">
+              <div class="heavy-pane-legend" id="heavy-pane-legend" data-polish="heavy-pane-legend" aria-label="Context bands"></div>
+              <div class="heavy-pane-controls" data-polish="heavy-pane-filters" aria-label="Heavy chart scope controls">
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Range</span>
                   <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend range">
@@ -3290,7 +3328,7 @@
           <div class="heavy-trend-wrap heavy-trend-wrap--full">
             <div class="heavy-trend-header">
               <span id="heavy-trend-title"></span>
-              <div class="heavy-trend-toggles">
+              <div class="heavy-trend-toggles" data-polish="heavy-trend-filters">
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Metric</span>
                   <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend metric">
@@ -6598,27 +6636,58 @@
       }
 
       // P0 — pane-level legend (one source of truth across ribbon + trend).
+      // Readable text color (near-black / near-white) for a given hex fill.
+      function _legendTextColor(hex) {
+        const m = /^#?([0-9a-fA-F]{6})$/.exec(hex || '');
+        if (!m) return 'rgba(255,255,255,0.95)';
+        const n = parseInt(m[1], 16);
+        const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return lum > 0.62 ? 'rgba(20,18,16,0.92)' : 'rgba(255,255,255,0.96)';
+      }
       renderPaneLegend = function() {
         if (!paneLegend) return;
         paneLegend.innerHTML = '';
-        const key = document.createElement('span');
-        key.className = 'heavy-pane-legend-key';
-        key.textContent = trendGroup === 'headless' ? 'Interactive vs headless' : 'Model + context band';
-        paneLegend.appendChild(key);
-        const legendItems = trendGroup === 'headless'
+        const items = (trendGroup === 'headless')
           ? HEADLESS_DEFS.map(b => ({ name: b.key, color: b.color }))
           : bandLegendItems;
-        legendItems.forEach(item => {
-          const lab = document.createElement('span');
-          lab.className = 'heavy-pane-legend-label';
-          const sw = document.createElement('span');
-          sw.className = 'heavy-pane-legend-box';
-          sw.style.background = item.color;
-          const txt = document.createTextNode(item.name);
-          lab.appendChild(sw);
-          lab.appendChild(txt);
-          paneLegend.appendChild(lab);
+
+        const bar = document.createElement('div');
+        bar.className = 'heavy-legend-bar';
+        const makeCell = (color, label) => {
+          const c = document.createElement('span');
+          c.className = 'heavy-legend-cell';
+          c.style.background = color;
+          c.style.color = _legendTextColor(color);
+          c.textContent = label;
+          return c;
+        };
+
+        // Opus·Fable bands collapse into one bracketed group (label inside =
+        // token range); Sonnet/Haiku are standalone segments (label = model).
+        let opusCells = null;
+        items.forEach(it => {
+          if (/Opus·Fable/.test(it.name)) {
+            const label = it.name.replace(/\s*\(Opus·Fable\)\s*/, '').trim();
+            if (!opusCells) {
+              const grp = document.createElement('div');
+              grp.className = 'heavy-legend-opus';
+              const lab = document.createElement('span');
+              lab.className = 'heavy-legend-bracket-label';
+              lab.textContent = 'Opus·Fable';
+              const brk = document.createElement('span');
+              brk.className = 'heavy-legend-bracket';
+              opusCells = document.createElement('span');
+              opusCells.className = 'heavy-legend-cells';
+              grp.appendChild(lab); grp.appendChild(brk); grp.appendChild(opusCells);
+              bar.appendChild(grp);
+            }
+            opusCells.appendChild(makeCell(it.color, label));
+          } else {
+            bar.appendChild(makeCell(it.color, it.name.replace(/\s*\(all\)\s*/, '').trim()));
+          }
         });
+        paneLegend.appendChild(bar);
       };
 
       // P0 — assertive ribbon headline driven by the highest-lift Opus+Fable band.
