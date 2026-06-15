@@ -417,8 +417,9 @@ def collect(days: int) -> Dataset:
                     # count and token sum, so the heavy-turn ribbon can
                     # compute lift × per band. Field names stay
                     # tokens_opus_* / turns_opus_* for schema stability.
-                    # bands cover big-context models (Opus + Fable).
-                    if model in ("opus", "fable"):
+                    # Context bands cover Opus only; Fable is its own group
+                    # (tokens_fable / turns_fable), surfaced via by_model.fable.
+                    if model == "opus":
                         if ctx_size <= 200_000:
                             d["tokens_opus_u200k"] += total_tokens
                             d["turns_opus_u200k"] += 1
@@ -1994,8 +1995,8 @@ def _build_daily_stats_from_turns(turns: list[Turn]) -> list[dict]:
             d["sonnet"] += 1; d["cost_sonnet"] += t.cost; d["tokens_sonnet"] += total_tok
         elif t.model == "haiku":
             d["haiku"] += 1; d["cost_haiku"] += t.cost; d["tokens_haiku"] += total_tok
-        if t.model in ("opus", "fable"):
-            # bands cover big-context models (Opus + Fable).
+        if t.model == "opus":
+            # Context bands cover Opus only; Fable is its own group.
             # Field names stay tokens_opus_* / turns_opus_* for schema stability.
             tier = ("u200k" if t.ctx <= 200_000 else "200_500k" if t.ctx <= 500_000
                     else "500_800k" if t.ctx <= 800_000 else "o800k")

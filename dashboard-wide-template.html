@@ -2129,8 +2129,8 @@
     background: var(--label-color, var(--ink-dim));
   }
   /* Stacked color-bar legend — contiguous colored segments with the label
-     INSIDE each (token range for Opus·Fable bands; model name for
-     Sonnet/Haiku). An "Opus·Fable" bracket spans the four premium segments. */
+     INSIDE each (token range for Opus context bands; model name for
+     Fable/Sonnet/Haiku). An "Opus" bracket spans the four Opus segments. */
   .heavy-legend-bar {
     display: flex;
     align-items: flex-end;     /* bottom-align cells; opus column is taller */
@@ -6529,10 +6529,11 @@
       const byModel = (P.heavy_buckets && P.heavy_buckets.by_model) || {};
 
       const RIBBON_TIERS = [
-        { name: '<200K (Opus·Fable)',    colorVar: '--tier-small',    key: 'opus_u200k' },
-        { name: '200–500K (Opus·Fable)', colorVar: '--tier-mid-low',  key: 'opus_200_500k' },
-        { name: '500–800K (Opus·Fable)', colorVar: '--tier-mid-high', key: 'opus_500_800k' },
-        { name: '>800K (Opus·Fable)',    colorVar: '--tier-large',    key: 'opus_o800k' },
+        { name: '<200K (Opus)',    colorVar: '--tier-small',    key: 'opus_u200k' },
+        { name: '200–500K (Opus)', colorVar: '--tier-mid-low',  key: 'opus_200_500k' },
+        { name: '500–800K (Opus)', colorVar: '--tier-mid-high', key: 'opus_500_800k' },
+        { name: '>800K (Opus)',    colorVar: '--tier-large',    key: 'opus_o800k' },
+        { name: 'Fable (all)',   colorVar: '--model-fable',   key: 'fable' },
         { name: 'Sonnet (all)',  colorVar: '--model-sonnet',  key: 'sonnet' },
       ].filter(t => {
         const m = byModel[t.key];
@@ -6567,6 +6568,7 @@
         '--tier-mid-low':  '#c98a3a',   // 200–500K — amber      (--band-ctx-2)
         '--tier-mid-high': '#9a4530',   // 500–800K — sienna     (--band-ctx-3)
         '--tier-large':    '#5c1f18',   // ≥800K   — mahogany    (--band-ctx-4)
+        '--model-fable':   '#b5476b',   // Fable  — muted rose   (its own group)
         '--model-sonnet':  '#7c5cad',   // Sonnet — cool purple  (--band-sonnet)
         '--model-haiku':   '#3a7aa8',   // Haiku  — teal-blue    (--band-haiku)
       };
@@ -6663,18 +6665,18 @@
           return c;
         };
 
-        // Opus·Fable bands collapse into one bracketed group (label inside =
-        // token range); Sonnet/Haiku are standalone segments (label = model).
+        // Opus context bands collapse into one bracketed group (label inside =
+        // token range); Fable/Sonnet/Haiku are standalone segments (label = model).
         let opusCells = null;
         items.forEach(it => {
-          if (/Opus·Fable/.test(it.name)) {
-            const label = it.name.replace(/\s*\(Opus·Fable\)\s*/, '').trim();
+          if (/\(Opus\)/.test(it.name)) {
+            const label = it.name.replace(/\s*\(Opus\)\s*/, '').trim();
             if (!opusCells) {
               const grp = document.createElement('div');
               grp.className = 'heavy-legend-opus';
               const lab = document.createElement('span');
               lab.className = 'heavy-legend-bracket-label';
-              lab.textContent = 'Opus·Fable';
+              lab.textContent = 'Opus';
               const brk = document.createElement('span');
               brk.className = 'heavy-legend-bracket';
               opusCells = document.createElement('span');
@@ -6710,7 +6712,7 @@
           return;
         }
         const heavy = activeRibbonTiers()
-          .filter(t => t.name && t.name.includes('Opus·Fable'))
+          .filter(t => t.name && t.name.includes('(Opus)'))
           .filter(t => t.turnPct > 0)
           .sort((a, b) => b.lift - a.lift)[0] || null;
         let headline = `Tokens roughly track turns by context band · ${rangeText}`;
@@ -6808,10 +6810,11 @@
         // Now that the column chart uses model-specific bands, Sonnet/Haiku
         // map to real series and get true cross-highlights too.
         const RIBBON_TO_BAND = {
-          'opus_u200k':     '<200K (Opus·Fable)',
-          'opus_200_500k':  '200–500K (Opus·Fable)',
-          'opus_500_800k':  '500–800K (Opus·Fable)',
-          'opus_o800k':     '>800K (Opus·Fable)',
+          'opus_u200k':     '<200K (Opus)',
+          'opus_200_500k':  '200–500K (Opus)',
+          'opus_500_800k':  '500–800K (Opus)',
+          'opus_o800k':     '>800K (Opus)',
+          'fable':          'Fable (all)',
           'sonnet':         'Sonnet (all)',
           'haiku':          'Haiku (all)',
           'Interactive':    'Interactive',
@@ -7053,18 +7056,21 @@
         // breakout. Uses the per-model context-band fields from daily_stats so
         // each band is disjoint and the stack sums to total tokens/turns.
         BAND_DEFS = [
-          { key: '<200K (Opus·Fable)',    color: '#e8d5a3',
+          { key: '<200K (Opus)',    color: '#e8d5a3',
             getTokens: d => d.tokens_opus_u200k     || 0,
             getTurns:  d => d.turns_opus_u200k      || 0 },
-          { key: '200–500K (Opus·Fable)', color: '#c98a3a',
+          { key: '200–500K (Opus)', color: '#c98a3a',
             getTokens: d => d.tokens_opus_200_500k  || 0,
             getTurns:  d => d.turns_opus_200_500k   || 0 },
-          { key: '500–800K (Opus·Fable)', color: '#9a4530',
+          { key: '500–800K (Opus)', color: '#9a4530',
             getTokens: d => d.tokens_opus_500_800k  || 0,
             getTurns:  d => d.turns_opus_500_800k   || 0 },
-          { key: '>800K (Opus·Fable)',    color: '#5c1f18',
+          { key: '>800K (Opus)',    color: '#5c1f18',
             getTokens: d => d.tokens_opus_o800k     || 0,
             getTurns:  d => d.turns_opus_o800k      || 0 },
+          { key: 'Fable (all)',     color: '#b5476b',
+            getTokens: d => d.tokens_fable          || 0,
+            getTurns:  d => d.turns_fable           || 0 },
           { key: 'Sonnet (all)',    color: '#7c5cad',
             getTokens: d => d.tokens_sonnet         || 0,
             getTurns:  d => d.sonnet                || 0 },
@@ -7947,7 +7953,7 @@
     },
     {
       title: 'Context depth — token burn by context size',
-      body:  'Each column is one day; height = tokens burned in heavy turns (>200K context). <strong>Color bands</strong> break out Opus·Fable context tiers vs Sonnet. <strong>Hover a band on the ribbon</strong> to cross-filter the column chart — the matching series lights up while others dim. Watch the auto-demo run through each band ↓.',
+      body:  'Each column is one day; height = tokens burned in heavy turns (>200K context). <strong>Color bands</strong> break out Opus context tiers, with Fable / Sonnet / Haiku as their own groups. <strong>Hover a band on the ribbon</strong> to cross-filter the column chart — the matching series lights up while others dim. Watch the auto-demo run through each band ↓.',
       targets: ['#heavy-ribbon', '#heavy-trend'],
       pad: 10,
       demo: 'cycleRibbon',
