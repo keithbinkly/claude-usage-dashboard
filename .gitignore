@@ -1,10 +1,12 @@
 # Generated dashboard output — contains your personal usage data
 *.html
 
-# Keep the templates and the committed sample
+# Keep the templates and the committed samples (synthetic data only — built
+# with --sample, which sets is_sample=true and nulls live/personal data).
 !dashboard-wide-template.html
 !dashboard-template.html
 !dashboard-sample.html
+!claude-usage-sample-wide.html
 
 # Python
 __pycache__/
