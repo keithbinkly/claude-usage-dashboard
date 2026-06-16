@@ -2080,11 +2080,11 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 14px;
-    /* Legend takes the left side and GROWS to fill it. The filters column on
-       the right is vertically stacked (Range over Group), so it's narrow —
-       which leaves the legend enough width to flow its swatches HORIZONTALLY
-       (1–2 rows) instead of the old leftover-width vertical stack. */
-    flex: 1 1 auto;
+    /* Legend hugs its content (the 354px color bar) instead of growing, so the
+       Days+Group controls can sit beside it on the same row. space-between on
+       the toolbar pushes them to opposite ends; flex-wrap drops the controls
+       below only when the card is too narrow for both. */
+    flex: 0 1 auto;
     min-width: 0;
     font-size: var(--fs-xs);
     color: var(--ink-dim);
@@ -2093,24 +2093,29 @@
   }
   .heavy-pane-toolbar {
     display: flex;
-    flex-wrap: nowrap;
-    align-items: flex-end;       /* legend bar + Range share a baseline, just above the ribbon */
-    justify-content: space-between;
-    gap: 12px 18px;
+    flex-wrap: wrap;            /* narrow card: toggles drop below the legend instead of clipping off the right */
+    align-items: flex-end;       /* filters sit on the COLOR-BAR row (bottom of the legend), not up by the "Opus" bracket label */
+    justify-content: flex-start; /* filters hug the legend (just to its right), not right-justified to the card edge */
+    gap: 8px 14px;
     padding: 6px 0 4px;          /* tight — legend sits directly above the ribbon */
     margin-bottom: 4px;
     /* divider line removed — it only added margin/visual noise */
   }
   .heavy-pane-controls {
     display: flex;
-    /* Days + Group sit SIDE BY SIDE on one row to the right of the legend, so
-       the whole toolbar is a single row (reclaims the second toggle row for
-       the charts). Bottom-aligned via the toolbar so they ride the legend bar. */
+    /* Days + Group ride one row to the RIGHT of the legend bar (reclaims the
+       second row the old column-reverse stack cost). The toolbar's flex-wrap
+       drops this whole block below the legend only when the card is too narrow
+       to fit both on one line. */
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
-    gap: 16px;
+    gap: 10px;
     flex: 0 0 auto;
+    /* hairline box around the filter cluster */
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
   }
   .heavy-pane-controls .trend-toggle-group {
     align-items: center;        /* title on the SAME line as its toggle buttons */
@@ -2160,7 +2165,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 3px 8px;
+    padding: 3px 4px;
     font-size: var(--fs-xs);
     font-weight: 600;
     line-height: 1.2;
@@ -2180,7 +2185,7 @@
   .trend-toggle-group {
     display: inline-flex;
     flex-direction: row;        /* title sits immediately LEFT of the toggles */
-    gap: 6px;
+    gap: 5px;
     align-items: center;
   }
   .trend-toggle-group-label {
@@ -2615,10 +2620,11 @@
      moved to the bottom of the chart so it does not crowd this row. */
   .heavy-trend-header {
     display: flex;
-    flex-direction: row;        /* title + Metric/Scale on ONE row — frees height for the chart below */
+    flex-direction: row;        /* title + filters share ONE row — filters ride up beside the title, freeing a row so the column chart grows taller */
+    flex-wrap: wrap;            /* narrow card: filters drop below the title instead of overflowing */
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    justify-content: flex-start;/* filters hug the title (just to its right), not right-justified */
+    gap: 6px 16px;
     /* Separator was border-bottom (under the toggles) when this header
        carried a title. Title was dropped → header now contains only the
        toggle row, and the separator visually orphaned beneath it. Flipped
@@ -2644,11 +2650,15 @@
     gap: 14px;
     align-items: center;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
     row-gap: 8px;
-    /* Hug content — parent column stretches children, which made the tour
-       spotlight (and any rect measurement) span the full panel width. */
-    align-self: flex-start;
+    /* Header is now a row (title + filters); center this cluster against the
+       title text rather than top-aligning it. */
+    align-self: center;
+    /* hairline box around the filter cluster */
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
   }
   @media (max-width: 720px) {
     /* Single-row layout on phones: hide group labels (Metric / Scale /
@@ -2702,8 +2712,8 @@
     font-weight: 600;
     line-height: 1;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 4px 7px;
+    letter-spacing: 0.02em;
+    padding: 4px 5px;
     background: transparent;
     color: var(--ink-muted);
     border: none;
@@ -3306,7 +3316,7 @@
               <div class="heavy-pane-controls" data-polish="heavy-pane-filters" aria-label="Heavy chart scope controls">
                 <div class="trend-toggle-group">
                   <span class="trend-toggle-group-label">Days</span>
-                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend window in days">
+                  <div class="trend-toggle seg-toggle" role="tablist" aria-label="Trend range">
                     <button type="button" data-trend-range="7">7</button>
                     <button type="button" data-trend-range="30">30</button>
                     <button type="button" data-trend-range="90" class="active">90</button>
@@ -3498,7 +3508,11 @@
     const optOut = qs.get('polish') === '0';
     const optIn = qs.has('polish') && !optOut;
     const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname);
-    if (optOut || (!optIn && !isLocal)) return;
+    // Auto-load for dev: localhost server AND file:// (double-clicked HTML,
+    // or opened via --open). file:// has an empty hostname, so it needs its
+    // own check or polish never loads when the dashboard is opened directly.
+    const isFile = location.protocol === 'file:';
+    if (optOut || (!optIn && !isLocal && !isFile)) return;
 
     // polish.js manages its own `is-polish-mode` class on activate/
     // deactivate; our CSS gates chart pointer-events on that class,
@@ -3510,7 +3524,11 @@
     // (every 5 min via launchd), so this forces browsers to re-fetch
     // polish.js whenever the dashboard regenerates.
     const v = encodeURIComponent((window.__USAGE__ && window.__USAGE__.generated_at) || Date.now());
-    s.src = '/tools/polish.js?v=' + v;
+    // Relative path resolves in ALL contexts: file:// (../polish.js next to the
+    // dashboard's parent dir), the LAN server (docs/ root), and the live site
+    // (/tools/claude-usage-monitor/<dash>.html → /tools/polish.js). The old
+    // absolute /tools/polish.js only worked when served, not via file://.
+    s.src = '../polish.js?v=' + v;
     s.onload = () => console.log('[polish] loaded — Ctrl+Shift+P to activate, or run: polish.toggle()');
     document.head.appendChild(s);
   })();
@@ -5767,21 +5785,40 @@
   // tap inside the chart again. This listener walks the chart registry
   // and fires `hideTip` whenever a tap lands outside ANY chart. Fix
   // for the "can't close tooltip" issue Keith reported.
+  function hideAllTooltips() {
+    // ECharts instances (trend chart, history, pacing, etc.)
+    try {
+      document.querySelectorAll('[_echarts_instance_]').forEach(node => {
+        const inst = echarts.getInstanceByDom(node);
+        if (inst) inst.dispatchAction({ type: 'hideTip' });
+      });
+    } catch (err) { /* silent */ }
+    // Custom hand-built SVG tooltip shared by the mekko + ribbon segments.
+    // On touch there is no mouseleave when you tap away, so this would
+    // otherwise stay pinned until the next data-point tap.
+    const mt = document.getElementById('mekko-tip');
+    if (mt) mt.removeAttribute('data-visible');
+  }
   function installTooltipDismissHandler() {
     const handle = (e) => {
       const t = e.target;
-      // Touch target inside any chart container → let ECharts handle it
-      if (t && t.closest && t.closest('.echarts-container, [_echarts_instance_]')) return;
-      // Otherwise, dismiss every live tooltip
-      try {
-        document.querySelectorAll('[_echarts_instance_]').forEach(node => {
-          const inst = echarts.getInstanceByDom(node);
-          if (inst) inst.dispatchAction({ type: 'hideTip' });
-        });
-      } catch (err) { /* silent */ }
+      // Tap inside a chart / the ribbon → let that surface manage its own
+      // tooltip (showing the tapped point). Everything else dismisses.
+      if (t && t.closest && t.closest('.echarts-container, [_echarts_instance_], #heavy-ribbon')) return;
+      hideAllTooltips();
     };
     document.addEventListener('touchstart', handle, { passive: true });
     document.addEventListener('click', handle, { passive: true });
+    // Scroll (or touch-drag scroll) dismisses every tooltip — a pinned
+    // tooltip should never ride along with the page.
+    let queued = false;
+    const onScroll = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { hideAllTooltips(); queued = false; });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    document.addEventListener('touchmove', onScroll, { passive: true });
   }
 
   // ─── Swipe-indicator dots for mobile carousels ─────────────────────
@@ -6744,7 +6781,12 @@
            so the ribbon SVG fills its row and both charts grow equally when
            the window expands. At narrow widths fall back to aspect-ratio. */
         const _trendH = trendEl ? Math.round(trendEl.getBoundingClientRect().height) : 0;
-        const _rbH = (window.innerWidth >= 1201 && _trendH > 0)
+        // Lock the ribbon to the SAME height as the column chart below it at
+        // EVERY width (mobile included) so the two read as an equal pair. Was
+        // gated to ≥1201px, which left the mobile ribbon at its short
+        // aspect-ratio height (~105px) beside a ~218px column. Fall back to
+        // aspect ratio only when the trend hasn't been measured yet.
+        const _rbH = (_trendH > 0)
           ? _trendH
           : Math.round(_rbW * 320 / 1000);
         /* Dynamic viewBox height: MUST track the element's true height/width
@@ -8101,20 +8143,37 @@
 
   // Mobile-specific scroll: puts the spotlight target in the available
   // space ABOVE the bottom-docked tour card (not scrollIntoView center).
+  // Bottom spacer added only while the tour runs on mobile, so even the
+  // LAST elements on the page (heavy card, its toggles) can scroll all the
+  // way up to the top of the screen — otherwise maxScroll runs out and the
+  // late steps land mid-screen. Removed on tour end.
+  let _tourSpacer = null;
+  function addTourSpacer() {
+    if (_tourSpacer) return;
+    _tourSpacer = document.createElement('div');
+    _tourSpacer.setAttribute('aria-hidden', 'true');
+    _tourSpacer.style.cssText = 'height:' + Math.round(window.innerHeight * 0.9) + 'px;width:1px;pointer-events:none;flex:0 0 auto;';
+    document.body.appendChild(_tourSpacer);
+  }
+  function removeTourSpacer() {
+    if (_tourSpacer && _tourSpacer.parentNode) _tourSpacer.parentNode.removeChild(_tourSpacer);
+    _tourSpacer = null;
+  }
+
   function scrollTargetIntoViewMobile(el) {
     const r = el.getBoundingClientRect();
-    const PAD = 12;
-    const ph = pop.offsetHeight || 200;
-    // Top of card in viewport coords
-    const cardTopInVw = window.innerHeight - ph - PAD;
-    // We want to center the target in the available space above the card
-    const usableHeight = cardTopInVw - PAD;
-    const desiredTopInVw = Math.max(PAD, (usableHeight - r.height) / 2 + PAD);
-    const delta = r.top - desiredTopInVw;
-    // Clamp: don't scroll past document top or bottom
+    const TOP = 16;  // pin the spotlight near the top of the screen on every stop
+    // Top-align the target (not center): the tour card is bottom-docked, so a
+    // top-pinned highlight stays clear of it and is consistent across all
+    // steps. Centering drifted the box down on later (lower-in-page) stops.
+    const delta = r.top - TOP;
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     const targetScroll = Math.max(0, Math.min(maxScroll, window.scrollY + delta));
-    window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+    // INSTANT (not smooth): the highlight rect is re-measured ~320ms later in
+    // show(); a smooth scroll for a large delta (steps 6+) isn't finished by
+    // then, so the box landed mid-scroll. Instant scroll makes the later
+    // measurement exact. The #tour-hl box still CSS-glides into place.
+    window.scrollTo({ top: targetScroll, behavior: 'auto' });
   }
 
   // ── Step demos ─────────────────────────────────────────────────────────
@@ -8278,6 +8337,11 @@
       scrollEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     setTimeout(() => {
+      // Mobile: re-pin against the now-settled layout (the previous step's
+      // demo cleanup can shift content between the initial scroll and this
+      // measurement, which drifted the spotlight off the top). Instant scroll
+      // + immediate measure keeps the box pinned to the top consistently.
+      if (isMobile()) scrollTargetIntoViewMobile(scrollEl);
       // Ignore display:contents/hidden targets so zero-size boxes cannot collapse the spotlight.
       const rects = els
         .map(el => el.getBoundingClientRect())
@@ -8323,6 +8387,7 @@
   function start() {
     active = true;
     _resetAnchorState();
+    if (isMobile()) addTourSpacer();
     launchBtn.classList.add('t-hidden');
     show(0);
   }
@@ -8333,6 +8398,7 @@
     hl.classList.add('t-hidden');
     pop.classList.add('t-hidden');
     launchBtn.classList.remove('t-hidden');
+    removeTourSpacer();
     // scroll back to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
