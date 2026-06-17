@@ -3621,6 +3621,25 @@
     if (isNaN(d.getTime())) return '';
     return MONTHS_ABBR[d.getMonth()] + ' ' + d.getDate();
   }
+  // Day-of-month axis label (Req 3). Returns an ECharts rich-text string:
+  //   normal day -> '{dom|13}'
+  //   month 1st  -> '{dom|1}\n{mmm|Jun}'  (MMM centered directly under the 1)
+  function fmtDomAxis(val) {
+    if (val == null) return '';
+    const d = (typeof val === 'string') ? new Date(val + 'T12:00:00') : new Date(val);
+    if (isNaN(d.getTime())) return '';
+    const dom = d.getDate();
+    if (dom === 1) return '{dom|1}\n{mmm|' + MONTHS_ABBR[d.getMonth()] + '}';
+    return '{dom|' + dom + '}';
+  }
+  // Shared rich styles for the DoM axis label.
+  // fontFamily/color omitted on purpose: ECharts rich segments inherit them
+  // from the parent axisLabel textStyle (fontFamily: T.mono, color: T.inkDim).
+  // Setting fontFamily:'inherit' here is invalid on canvas and drops the mono.
+  const DOM_AXIS_RICH = {
+    dom: { fontSize: 11, lineHeight: 13, align: 'center' },
+    mmm: { fontSize: 10, lineHeight: 13, fontWeight: 700, align: 'center' },
+  };
   // Sparkline interval: origin + every 5th day. With "Mon DD" labels
   // (4-6 chars each) we need wider stride than the old every-3rd-day
   // pattern. hideOverlap catches any that still collide.
@@ -4363,6 +4382,15 @@
 
     const active = now < last.end;
     const win = last;
+    // Day-name axis labels (Req 2). mode tunable so the side/anti-overlap
+    // strategy can be judged at a glance and swapped without a rebuild path change.
+    //   'hybrid'        — base side = opposite the delta sign, then flip-on-collision, then skip
+    //   'sign-opposite' — base side only, skip on collision (no flip)
+    //   'flip'          — strict alternate above/below, ignore sign, skip on collision
+    //   'top-row'       — all labels along the top edge, skip on collision
+    //   'off'           — no day labels
+    const PACE_DAYLABEL_MODE = 'hybrid';
+    const PACE_DAYLABEL_MINDAYS = 2;   // skip on single-day windows (e.g. the 5h card)
     const elapsed = active ? (now - win.anchor) : windowMs;
     const remaining = active ? (win.end - now) : 0;
     const pctTime = (elapsed / windowMs) * 100;
@@ -4570,9 +4598,77 @@
     // path element and ignores per-segment visualMap coloring, so the
     // gradient falls back to the default series color. Canvas paints
     // each segment independently and respects the visualMap.
-    const chart = echarts.init(document.getElementById(prefix + '-chart'), null, {
+    const chartDom = document.getElementById(prefix + '-chart');
+    const chart = echarts.init(chartDom, null, {
       renderer: 'canvas', useCoarsePointer: true, pointerSize: 32,
     });
+    const dayLabelItems = (() => {
+      if (PACE_DAYLABEL_MODE === 'off' || win.end <= win.anchor) return [];
+      const boundaries = [win.anchor];
+      const cursor = new Date(win.anchor);
+      cursor.setHours(24, 0, 0, 0);
+      for (let t = cursor.getTime(); t < win.end; ) {
+        if (t > win.anchor) boundaries.push(t);
+        cursor.setDate(cursor.getDate() + 1);
+        t = cursor.getTime();
+      }
+      boundaries.push(win.end);
+      const numDays = boundaries.length - 1;
+      if (numDays < PACE_DAYLABEL_MINDAYS) return [];
+
+      function deltaAt(ts) {
+        if (!cumPts || !cumPts.length || ts < cumPts[0][0]) return 0;
+        let delta = cumPts[0][1] || 0;
+        for (const p of cumPts) {
+          if (p[0] > ts) break;
+          delta = p[1] || 0;
+        }
+        return delta;
+      }
+
+      const dom = chart.getDom ? chart.getDom() : chartDom;
+      const plotW = Math.max(1, ((dom && dom.clientWidth) || 440) - 20);
+      const labelW = 26;
+      const rightReserve = 40;
+      const lastX = { above: -Infinity, below: -Infinity };
+      const labels = [];
+      const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      for (let i = 0; i < numDays; i++) {
+        const center = (boundaries[i] + boundaries[i + 1]) / 2;
+        const xpx = ((center - win.anchor) / (win.end - win.anchor)) * plotW;
+        if (plotW - xpx < rightReserve) continue;
+        const baseSide = PACE_DAYLABEL_MODE === 'flip'
+          ? (i % 2 === 0 ? 'above' : 'below')
+          : PACE_DAYLABEL_MODE === 'top-row'
+            ? 'above'
+            : deltaAt(center) < 0 ? 'above' : 'below';   // y<0 → above, else (incl. 0) → under
+        const otherSide = baseSide === 'above' ? 'below' : 'above';
+        let side = null;
+        if (xpx - lastX[baseSide] >= labelW) {
+          side = baseSide;
+        } else if (PACE_DAYLABEL_MODE === 'hybrid' && xpx - lastX[otherSide] >= labelW) {
+          side = otherSide;
+        }
+        if (!side) continue;
+        lastX[side] = xpx;
+        labels.push({
+          coord: [center, 0],   // anchor to the BASELINE, not the padded plot edge
+          label: {
+            show: true,
+            formatter: dayNames[new Date(center).getDay()],
+            color: T.inkDim,
+            fontFamily: T.mono,
+            fontSize: 9,
+            align: 'center',
+            // Sit NEARLY FLUSH to the baseline — just clear of it on the side
+            // opposite the delta line, not floating out at the plot edge.
+            position: side === 'above' ? 'top' : 'bottom',
+            distance: 3,
+          },
+        });
+      }
+      return labels;
+    })();
 
     chart.setOption({
       backgroundColor: 'transparent',
@@ -4586,7 +4682,7 @@
       // line (icon ~13px + label ~12px + 4px buffer = 29px minimum).
       /* Symmetric L/R margins so the window end reads centered in the
          pane; icons + timestamps sit in the top padding (36px). */
-      grid: { left: 10, right: 10, top: 36, bottom: 8, containLabel: false },
+      grid: { left: 10, right: 10, top: 36, bottom: 20, containLabel: false },
       // Pace-relative smooth gradient. 8 color stops evenly spaced
       // across gradMin..gradMax so delta=0 lands exactly on stop 5
       // (position 5/7 ≈ 0.714 = (0 − (−0.25)) / 0.35):
@@ -4734,11 +4830,10 @@
           // 1×8 rects straddle y=0 so you can count hours/days along
           // the baseline.
           //
-          // When you're pacing ahead of the clock, we overlay a second
-          // run of warn-colored crosshatches from now out to the
-          // projected cap-hit moment, capped with a taller labeled
-          // tick. Visually: "this is the runway remaining at the
-          // current burn rate before cap out."
+          // When you're pacing ahead of the clock, we overlay a run of
+          // warn-colored chevrons from projected cap-hit to reset, capped
+          // with a labeled cap marker. Visually: "this is the runway
+          // remaining at the current burn rate before reset."
           markPoint: (() => {
             const ONE_DAY = 24 * 60 * 60 * 1000;
             const ONE_HOUR = 60 * 60 * 1000;
@@ -4770,7 +4865,7 @@
               });
             }
 
-            // Over-pace projection: ✕ + timestamp label + crosshatches.
+            // Over-pace projection: ✕ + timestamp label + chevrons.
             if (active && projCapMs != null && lockoutMsProj > 0) {
               ticks.push({
                 coord: [projCapMs, yMax],
@@ -4789,11 +4884,21 @@
                 },
               });
               const denseStep = lockoutMsProj / 16;
+              // Left-pointing OPEN chevrons marching back from reset toward the
+              // projected cap (runway being eaten away). Open STROKE (transparent
+              // fill + amber border) so it reads as a "<", not a solid wedge.
+              // VERTEX (opening) angle ≈ 2·atan(h / 2w) — with symbolSize [2.5,12]
+              // that's ~135° (Keith-picked off a calibration strip). The angle is
+              // driven by the w:h ratio; symbolKeepAspect MUST be false (true
+              // silently fills the path solid and squashes the angle).
+              const CHEVRON_LEFT = 'path://M10,0 L0,7 L10,14';   // open V, apex left
               for (let t = projCapMs + denseStep; t < win.end; t += denseStep) {
                 ticks.push({
                   coord: [t, 0],
-                  symbolSize: [1.5, 11],
-                  itemStyle: { color: T.warn, opacity: 0.85 },
+                  symbol: CHEVRON_LEFT,
+                  symbolSize: [2.5, 12],     // [w,h] → vertex ≈ 135°
+                  symbolKeepAspect: false,
+                  itemStyle: { color: 'transparent', borderColor: T.warn, borderWidth: 1.4, opacity: 0.9 },
                 });
               }
             }
@@ -4928,6 +5033,18 @@
           silent: false,
           z: 2,
         }] : []),
+        {
+          name: 'daylabels',
+          type: 'line',
+          data: [],
+          silent: true,
+          z: 0,
+          markPoint: {
+            silent: true, animation: false,
+            symbol: 'circle', symbolSize: 0,
+            data: dayLabelItems,
+          },
+        },
       ],
     });
     return chart;
@@ -5403,6 +5520,7 @@
       if (!m) return;
       const source = currentGranularity === 'week' ? weekly : daily;
       const data = source.map(d => [d.day, m.get(d)]);
+      const _nDays = data.length;
       // Rolling window adapts to granularity: 7 days for daily, 4 weeks for weekly.
       const rollingN = currentGranularity === 'week' ? 4 : 7;
       const rollingArr = (() => {
@@ -5478,29 +5596,31 @@
           axisLine: { lineStyle: { color: T.border } },
           axisLabel: {
             color: T.inkDim, fontFamily: T.mono, fontSize: 11, hideOverlap: true,
-            // Calendar-anchored ticks: 1st + 15th of every month. Gives
-            // a consistent rhythm readers can align to mental calendar
-            // pages ("first half / second half of March"). Works for
-            // both day grain (xAxis data = every day) and week grain
-            // (xAxis data = Mondays; show the Monday whose 7-day week
-            // CONTAINS the 1st or 15th of any month).
+            // Day-of-month ticks: every day for compact windows; Saturdays
+            // only past 60 days, with MMM under every month 1st.
             interval: (idx, val) => {
               if (!val) return false;
               const d = new Date(val + 'T12:00:00');
-              if (currentGranularity === 'week') {
-                // Week-grain: each bar represents a Mon→Sun span. Show
-                // the Monday if that week spans the 1st or 15th.
-                for (let i = 0; i < 7; i++) {
-                  const day = new Date(d);
-                  day.setDate(d.getDate() + i);
-                  if (day.getDate() === 1 || day.getDate() === 15) return true;
-                }
-                return false;
-              }
-              // Day-grain: show the 1st and 15th directly.
-              return d.getDate() === 1 || d.getDate() === 15;
+              if (isNaN(d.getTime())) return false;
+              if (currentGranularity === 'week') return true;
+              if (d.getDate() === 1) return true;
+              if (_nDays > 60) return d.getDay() === 6;
+              return true;
             },
-            formatter: fmtDateAxis,
+            // Day grain → fmtDomAxis (DoM, MMM under each 1st). Week grain →
+            // each bar is a Mon→Sun span: show the Monday's DoM and surface MMM
+            // when that week CONTAINS a 1st (a Monday is almost never the 1st).
+            formatter: (val) => {
+              if (currentGranularity !== 'week') return fmtDomAxis(val);
+              const d = new Date(val + 'T12:00:00');
+              if (isNaN(d.getTime())) return '';
+              for (let i = 0; i < 7; i++) {
+                const dd = new Date(d); dd.setDate(d.getDate() + i);
+                if (dd.getDate() === 1) return '{dom|' + d.getDate() + '}\n{mmm|' + MONTHS_ABBR[dd.getMonth()] + '}';
+              }
+              return '{dom|' + d.getDate() + '}';
+            },
+            rich: DOM_AXIS_RICH,
           },
           axisTick: { show: false },
         },
@@ -7175,6 +7295,7 @@
           // Refresh the visible window before building series.
           daily = currentDaily();
           days = daily.map(d => d.day);
+          const _nHeavy = days.length;
           const series = buildSeries(trendMetric, trendScale);
           const metricWord = trendMetric === 'turns' ? 'turns' : 'tokens';
 
@@ -7233,7 +7354,7 @@
               top: 26,
               left: 0,
               right: 0,
-              bottom: 24,
+              bottom: 42,   // room for 2-line DoM + MMM axis labels (Req 3)
               containLabel: false,
             },
             xAxis: {
@@ -7246,13 +7367,21 @@
               axisTick: { show: false },
               axisLabel: {
                 show: true,
-                interval: sparkInterval,
+                interval: (idx, val) => {
+                  if (!val) return false;
+                  const d = new Date(val + 'T12:00:00');
+                  if (isNaN(d.getTime())) return false;
+                  if (d.getDate() === 1) return true;
+                  if (_nHeavy > 60) return d.getDay() === 6;
+                  return true;
+                },
                 hideOverlap: true,
                 fontSize: 11,
                 color: T.inkDim,
                 fontFamily: T.mono,
-                formatter: fmtSparkDateAxis,
-                margin: 12,
+                formatter: fmtDomAxis,
+                rich: DOM_AXIS_RICH,
+                margin: 6,
               },
             },
             yAxis,
