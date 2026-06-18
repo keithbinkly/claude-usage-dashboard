@@ -2108,7 +2108,7 @@
        drops this whole block below the legend only when the card is too narrow
        to fit both on one line. */
     flex-direction: row;
-    align-items: center;
+    align-items: flex-end;
     justify-content: flex-end;
     gap: 10px;
     flex: 0 0 auto;
@@ -2118,7 +2118,7 @@
     padding: 3px 8px;
   }
   .heavy-pane-controls .trend-toggle-group {
-    align-items: center;        /* title on the SAME line as its toggle buttons */
+    align-items: flex-end;      /* lower edges match the legend bar */
   }
   .heavy-pane-legend-label {
     display: inline-flex;
@@ -3178,7 +3178,8 @@
     <details class="method-note">
       <summary aria-label="How the pace line works">Info</summary>
       <div class="method-body">
-        <p>The pace line shows how far above or below a steady burn you are — not total spend. A steady pace that would land you exactly at the limit when the window resets plots as a flat line at zero. Under-pace dips down (green); over-pace climbs up (yellow → red).</p>
+        <p>The pace line shows how far above or below your <em>expected</em> pace you are — not total spend. Land exactly on the expected line and it plots flat at zero; under-pace dips down (green), over-pace climbs up (yellow → red).</p>
+        <p><strong>Weekly pacing is seasonal:</strong> on the weekly card, “expected” is your <em>typical weekly rhythm</em>, not a flat around-the-clock burn. We build a completion-factor curve from your last few complete weeks — the share of a week’s total you’d normally have spent by this point — so a busy Monday morning isn’t judged as if nights and weekends burned at the same rate, and the projected cap-hit follows your real shape. It needs ~3 weeks of history to switch on; before that (and on the 5-hour and monthly cards) the expected line stays a straight, steady-burn pace to the limit.</p>
         <p><strong>Spending limit:</strong> Anthropic doesn't publish a hard dollar number for Max tiers, so we work it out from <code>/api/oauth/usage</code> — the same feed Claude Code's <code>/usage</code> command reads. If that endpoint is unreachable, we fall back to the observed ceiling (~$5,900/week).</p>
         <p><strong>Reset time:</strong> pulled live from <code>/api/oauth/usage</code>. The reset anchor is usually stable but Anthropic can shift it (bug fixes, billing changes), so we always trust the live timestamp over a day-of-week assumption.</p>
       </div>
@@ -3624,12 +3625,29 @@
   // Day-of-month axis label (Req 3). Returns an ECharts rich-text string:
   //   normal day -> '{dom|13}'
   //   month 1st  -> '{dom|1}\n{mmm|Jun}'  (MMM centered directly under the 1)
-  function fmtDomAxis(val) {
+  //   first rendered day can also force the MMM line even when day !== 1
+  function parseDomAxisDate(val) {
     if (val == null) return '';
     const d = (typeof val === 'string') ? new Date(val + 'T12:00:00') : new Date(val);
-    if (isNaN(d.getTime())) return '';
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function shouldRenderDomAxisLabel(val, total) {
+    const d = parseDomAxisDate(val);
+    if (!d) return false;
+    if (total > 60) return d.getDay() === 6 || d.getDate() === 1;
+    return true;
+  }
+  function firstRenderedDomAxisIndex(values, total) {
+    for (let i = 0; i < values.length; i++) {
+      if (shouldRenderDomAxisLabel(values[i], total)) return i;
+    }
+    return -1;
+  }
+  function fmtDomAxis(val, forceMonth) {
+    const d = parseDomAxisDate(val);
+    if (!d) return '';
     const dom = d.getDate();
-    if (dom === 1) return '{dom|1}\n{mmm|' + MONTHS_ABBR[d.getMonth()] + '}';
+    if (forceMonth || dom === 1) return '{dom|' + dom + '}\n{mmm|' + MONTHS_ABBR[d.getMonth()] + '}';
     return '{dom|' + dom + '}';
   }
   // Shared rich styles for the DoM axis label.
@@ -5693,6 +5711,9 @@
       const source = currentGranularity === 'week' ? weekly : daily;
       const data = source.map(d => [d.day, m.get(d)]);
       const _nDays = data.length;
+      const firstDayLabelIdx = currentGranularity === 'week'
+        ? -1
+        : firstRenderedDomAxisIndex(data.map(d => d[0]), _nDays);
       // Rolling window adapts to granularity: 7 days for daily, 4 weeks for weekly.
       const rollingN = currentGranularity === 'week' ? 4 : 7;
       const rollingArr = (() => {
@@ -5770,20 +5791,15 @@
             color: T.inkDim, fontFamily: T.mono, fontSize: 11, hideOverlap: true,
             // Day-of-month ticks: every day for compact windows; Saturdays
             // only past 60 days, with MMM under every month 1st.
-            interval: (idx, val) => {
-              if (!val) return false;
-              const d = new Date(val + 'T12:00:00');
-              if (isNaN(d.getTime())) return false;
-              if (currentGranularity === 'week') return true;
-              if (d.getDate() === 1) return true;
-              if (_nDays > 60) return d.getDay() === 6;
-              return true;
-            },
+            interval: 0,
             // Day grain → fmtDomAxis (DoM, MMM under each 1st). Week grain →
             // each bar is a Mon→Sun span: show the Monday's DoM and surface MMM
             // when that week CONTAINS a 1st (a Monday is almost never the 1st).
-            formatter: (val) => {
-              if (currentGranularity !== 'week') return fmtDomAxis(val);
+            formatter: (val, idx) => {
+              if (currentGranularity !== 'week') {
+                if (!shouldRenderDomAxisLabel(val, _nDays)) return '';
+                return fmtDomAxis(val, idx === firstDayLabelIdx);
+              }
               const d = new Date(val + 'T12:00:00');
               if (isNaN(d.getTime())) return '';
               for (let i = 0; i < 7; i++) {
@@ -7468,6 +7484,7 @@
           daily = currentDaily();
           days = daily.map(d => d.day);
           const _nHeavy = days.length;
+          const firstHeavyLabelIdx = firstRenderedDomAxisIndex(days, _nHeavy);
           const series = buildSeries(trendMetric, trendScale);
           const metricWord = trendMetric === 'turns' ? 'turns' : 'tokens';
 
@@ -7539,19 +7556,15 @@
               axisTick: { show: false },
               axisLabel: {
                 show: true,
-                interval: (idx, val) => {
-                  if (!val) return false;
-                  const d = new Date(val + 'T12:00:00');
-                  if (isNaN(d.getTime())) return false;
-                  if (d.getDate() === 1) return true;
-                  if (_nHeavy > 60) return d.getDay() === 6;
-                  return true;
-                },
+                interval: 0,
                 hideOverlap: true,
                 fontSize: 11,
                 color: T.inkDim,
                 fontFamily: T.mono,
-                formatter: fmtDomAxis,
+                formatter: (val, idx) => {
+                  if (!shouldRenderDomAxisLabel(val, _nHeavy)) return '';
+                  return fmtDomAxis(val, idx === firstHeavyLabelIdx);
+                },
                 rich: DOM_AXIS_RICH,
                 margin: 6,
               },
