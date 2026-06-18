@@ -4362,6 +4362,159 @@
   // stays unaffected.
   const chartUnit = { p5h: 'usd', pw: 'usd' };
 
+  // ─── Weekly seasonal completion-factor model ──────────────────────────
+  // Replaces the weekly pacing card's LINEAR cap-hit projection (and, once
+  // enough history exists, its baseline) with a seasonal model: C(x) = the
+  // fraction of a typical week's total spend that has occurred by elapsed
+  // fraction x. A Monday-morning workday then no longer extrapolates the
+  // workday burn rate through nights + weekend and wildly over-project the
+  // cap. GATED TO THE WEEKLY CARD ONLY (prefix 'pw'); 5h + monthly keep the
+  // existing linear path untouched.
+  //
+  // Pure helper (no closure deps) so it can be unit-tested headless — see
+  // pacing_selfcheck.mjs. The returned expectedAt() bakes the n>=3 baseline
+  // gate internally, so callers never branch on history depth. Cold-start
+  // tiers (n = #valid prior weeks):
+  //   n=0  → linear everything; cap-hit marker only if already over cap
+  //   n=1  → additive projection (last week's remaining), linear baseline
+  //   n=2  → blended projection w/ guards, linear baseline
+  //   n>=3 → full seasonal projection + reshaped (seasonal) baseline
+  function buildWeeklySeasonality(wins, win, cap, isUsd, windowMs, nowMs) {
+    const GRID = 168;  // hourly grid across the 7-day window
+    const turnVal = t => isUsd ? (t.c || 0)
+                               : ((t.in || 0) + (t.out || 0) + (t.cr || 0) + (t.cw || 0));
+    const minFinal = Math.max(cap * 0.0025, isUsd ? 0.01 : 1);
+    const med = arr => {
+      const a = arr.filter(v => v != null && isFinite(v)).slice().sort((x, y) => x - y);
+      if (!a.length) return null;
+      const m = a.length >> 1;
+      return (a.length & 1) ? a[m] : (a[m - 1] + a[m]) / 2;
+    };
+    const interp = (grid, x) => {
+      const xc = x <= 0 ? 0 : x >= 1 ? 1 : x;
+      const gf = xc * GRID, lo = Math.floor(gf), hi = Math.min(GRID, lo + 1);
+      return grid[lo] + (grid[hi] - grid[lo]) * (gf - lo);
+    };
+
+    // Collect prior COMPLETE weekly windows (exclude the active one), oldest
+    // first; keep at most K=6 most recent valid weeks.
+    const priors = [];
+    for (const w of wins) {
+      if (w === win) continue;
+      // Must be a COMPLETE prior window that does NOT overlap the active one.
+      // Tightened from `<= nowMs` to `<= win.anchor` so a live/calibrated
+      // weekly reset (which re-anchors ONLY the current window) can't feed an
+      // overlapping prior into the curve and double-count its spend. Residual:
+      // priors keep their baked phase, so a calibrated reset differing from the
+      // baked anchor blurs the day-of-week profile — a v1-accepted limitation
+      // per the design decision's DST/anchor-drift note.
+      if (!(w.end <= win.anchor)) continue;
+      const wm = (w.end - w.anchor) || windowMs;
+      const ts = (w.turns || []).slice().sort((a, b) => a.ts - b.ts);
+      let final = 0;
+      for (const t of ts) final += turnVal(t);
+      if (!(final >= minFinal)) continue;               // skip thin/empty weeks
+      const cf = new Array(GRID + 1).fill(0);
+      let run = 0, ti = 0;
+      for (let g = 0; g <= GRID; g++) {
+        const edge = w.anchor + (g / GRID) * wm;
+        while (ti < ts.length && ts[ti].ts <= edge) { run += turnVal(ts[ti]); ti++; }
+        cf[g] = final > 0 ? run / final : 0;            // completion factor A_i(x)/F_i
+      }
+      cf[0] = 0; cf[GRID] = 1;
+      priors.push({ cf, final });
+    }
+    const used = priors.slice(-6);
+    const n = used.length;
+    const seasonalActive = n >= 3;
+
+    // Median completion curve across the kept weeks, monotonic + lightly
+    // smoothed (pre-computed once — no per-call grid work in expectedAt).
+    let C = null;
+    if (n > 0) {
+      C = new Array(GRID + 1).fill(0);
+      for (let g = 0; g <= GRID; g++) C[g] = med(used.map(p => p.cf[g])) || 0;
+      C[0] = 0; C[GRID] = 1;
+      for (let g = 1; g <= GRID; g++) if (C[g] < C[g - 1]) C[g] = C[g - 1];
+      const sm = C.slice();
+      for (let g = 1; g < GRID; g++) sm[g] = (C[g - 1] + C[g] + C[g + 1]) / 3;
+      sm[0] = 0; sm[GRID] = 1;
+      for (let g = 1; g <= GRID; g++) if (sm[g] < sm[g - 1]) sm[g] = sm[g - 1];
+      if (sm[GRID] > 0 && sm[GRID] !== 1) for (let g = 0; g <= GRID; g++) sm[g] /= sm[GRID];
+      C = sm;
+    }
+
+    const xOf = ts => (ts - win.anchor) / windowMs;     // unclamped → linear parity
+
+    // Baseline: seasonal ONLY when n>=3, else linear (single source of truth
+    // so cumPts / expectedNow / tooltip never branch on n themselves). The
+    // linear branch is byte-identical to the prior `cap * (ts-anchor)/H`.
+    function expectedAt(ts) {
+      if (cap <= 0) return 0;
+      const x = xOf(ts);
+      return seasonalActive ? cap * interp(C, x) : cap * x;
+    }
+
+    // Projection: blended additive↔multiplicative completion-factor model.
+    function project() {
+      const xc = Math.max(0, Math.min(1, xOf(nowMs)));
+      const cNow = (n > 0) ? interp(C, xc) : xc;        // projection curve value
+      let current = 0;
+      for (const t of (win.turns || [])) current += turnVal(t);
+
+      let projectedFinal;
+      if (n === 0) {
+        projectedFinal = xc > 0 ? current / xc : current;          // linear extrapolation
+      } else {
+        const rem = used.map(p => p.final - interp(p.cf, xc) * p.final);
+        const pAdd = current + (med(rem) || 0);                    // codex R_hist additive
+        if (n === 1) {
+          projectedFinal = pAdd;                                   // n=1 additive only
+        } else {
+          let pMult = pAdd, wMult = 0;
+          if (cNow >= 0.15) {                                      // division guard
+            pMult = current / cNow;
+            wMult = Math.max(0, Math.min(1, (cNow - 0.15) / 0.15));
+          }
+          projectedFinal = (1 - wMult) * pAdd + wMult * pMult;
+        }
+      }
+      if (!isFinite(projectedFinal) || projectedFinal < current) projectedFinal = current;
+
+      // Cap-hit marker (ONE mechanism: grid+interp scan of the projected
+      // cumulative S(x) = current + (projectedFinal-current)·(C(x)-C(xNow))/(1-C(xNow))
+      // on the smoothed curve). Suppressed unless meaningfully over.
+      let projCapMs = null;
+      const overAlready = cap > 0 && current >= cap;
+      if (overAlready) {
+        projCapMs = nowMs;
+      } else if (n >= 1 && cap > 0 && projectedFinal > cap && (1 - cNow) >= 0.02) {
+        const denom = 1 - cNow;
+        const Sx = x => current + (projectedFinal - current) * (interp(C, x) - cNow) / denom;
+        let hitX = null;
+        for (let g = 0; g <= GRID; g++) {
+          const x = g / GRID;
+          if (x < xc) continue;
+          if (Sx(x) >= cap) {
+            if (g === 0) { hitX = 0; }
+            else {
+              const x0 = (g - 1) / GRID, x1 = g / GRID, s0 = Sx(x0), s1 = Sx(x1);
+              hitX = s1 > s0 ? x0 + (cap - s0) / (s1 - s0) * (x1 - x0) : x1;
+            }
+            break;
+          }
+        }
+        if (hitX != null) {
+          const tHit = win.anchor + hitX * windowMs;
+          if (tHit > nowMs && tHit < win.end) projCapMs = tHit;
+        }
+      }
+      return { projectedFinal, projCapMs, cNow, xNow: xc, current, n };
+    }
+
+    return { expectedAt, project, n, seasonalActive };
+  }
+
   function renderPacing(prefix, windowMs, wins, capUsd, capTok) {
     const last = wins[wins.length - 1];
     const $ = id => document.getElementById(prefix + '-' + id);
@@ -4478,7 +4631,14 @@
     const cumPts = [];
     let running = 0;
     const firstTs = win.anchor;
+    // Weekly card only ('pw'): build the seasonal completion-factor model
+    // once per render. The 5h ('p5h') and monthly ('pm') cards pass
+    // season=null and keep the linear path below byte-for-byte.
+    const season = (prefix === 'pw' && cap > 0)
+      ? buildWeeklySeasonality(wins, win, cap, isUsd, windowMs, now)
+      : null;
     function expectedAt(ts) {
+      if (season) return season.expectedAt(ts);
       return cap > 0 ? cap * ((ts - firstTs) / windowMs) : 0;
     }
     cumPts.push([win.anchor, 0]);
@@ -4554,7 +4714,9 @@
     // anything below is "under pace" (green). No "on pace" band: Keith
     // wants the line to turn yellow the moment it crosses above, not
     // after some fuzzy tolerance.
-    const expectedNow = active ? (cap * (elapsed / windowMs)) : 0;
+    // expectedAt(now) === cap*(elapsed/windowMs) for the linear (5h/monthly)
+    // path; seasonal for the weekly card. Single source of truth.
+    const expectedNow = active ? expectedAt(now) : 0;
     const deltaNow = cost - expectedNow;
     const overPace  = cap > 0 && deltaNow >= 0;
     const underPace = cap > 0 && deltaNow <  0;
@@ -4583,7 +4745,15 @@
     // geometry as the session-end line at win.end).
     let projCapMs = null;
     let lockoutMsProj = 0;
-    if (active && cap > 0 && running > 0) {
+    if (season && active && cap > 0) {
+      // Weekly card: seasonal cap-hit projection (replaces the linear burn
+      // extrapolation that over-projects on a Monday-morning workday).
+      const pr = season.project();
+      if (pr.projCapMs != null) {
+        projCapMs = pr.projCapMs;
+        lockoutMsProj = win.end - pr.projCapMs;
+      }
+    } else if (active && cap > 0 && running > 0) {
       const burnPerMs = running / Math.max(1, now - win.anchor);
       if (burnPerMs > 0) {
         const tHit = win.anchor + cap / burnPerMs;
@@ -4734,7 +4904,9 @@
           const ts = params[0].data[0];
           const elapsedAt = ts - win.anchor;
           const elapsedFrac = Math.max(0, Math.min(1, elapsedAt / windowMs));
-          const expectedAtTs = cap > 0 ? cap * elapsedFrac : 0;
+          // Route through the shared expectedAt so the "pace:" line reflects
+          // the seasonal baseline on the weekly card (linear elsewhere).
+          const expectedAtTs = expectedAt(ts);
           // Reverse the delta-chart math to reconstruct the hovered
           // cumulative-spent value. cumPts are [ts, delta] where
           // delta = running - expected, so running = delta + expected.
