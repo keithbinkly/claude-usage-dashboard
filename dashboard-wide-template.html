@@ -2108,7 +2108,7 @@
        drops this whole block below the legend only when the card is too narrow
        to fit both on one line. */
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     justify-content: flex-end;
     gap: 10px;
     flex: 0 0 auto;
@@ -2118,7 +2118,7 @@
     padding: 3px 8px;
   }
   .heavy-pane-controls .trend-toggle-group {
-    align-items: flex-end;      /* lower edges match the legend bar */
+    align-items: center;        /* title on the SAME line as its toggle buttons */
   }
   .heavy-pane-legend-label {
     display: inline-flex;
@@ -3634,7 +3634,7 @@
   function shouldRenderDomAxisLabel(val, total) {
     const d = parseDomAxisDate(val);
     if (!d) return false;
-    if (total > 60) return d.getDay() === 6 || d.getDate() === 1;
+    if (total > 40) return d.getDay() === 6 || d.getDate() === 1;
     return true;
   }
   function firstRenderedDomAxisIndex(values, total) {
