@@ -3939,12 +3939,31 @@
       (RL_LIVE.five_hour || RL_LIVE.seven_day) ? 'windows'
       : RL_LIVE.monthly ? 'monthly' : 'unknown';
   }
-  // 5h/7d accessors prefer RL_MAX (where the populated window data lives
-  // when this CLI session is on an enterprise account).
-  function rlFiveHour() { return (RL_MAX && RL_MAX.five_hour) || (RL_LIVE && RL_LIVE.five_hour) || null; }
-  function rlSevenDay() { return (RL_MAX && RL_MAX.seven_day) || (RL_LIVE && RL_LIVE.seven_day) || null; }
-  let wkResetMsLive = (rlSevenDay() && rlSevenDay().resets_at_ms) || null;
-  let h5ResetMsLive = (rlFiveHour() && rlFiveHour().resets_at_ms) || null;
+  // 5h/7d accessors prefer the FRESHER of RL_MAX / RL_LIVE per window: pick
+  // whichever source has the newest fetched_at_ms among those with a populated
+  // utilization, else any wrapper that exists. (Previously hard-preferred
+  // RL_MAX, which silently displayed an 18h-stale secondary-account snapshot
+  // — 0% — over fresh live data — 10%. Fixed 2026-06-20: prefer-fresher.)
+  function _rlPick(key) {
+    const cands = [RL_MAX, RL_LIVE].filter(s => s && s[key] && s[key].utilization != null);
+    if (cands.length) {
+      cands.sort((a, b) => (b.fetched_at_ms || 0) - (a.fetched_at_ms || 0));
+      return { win: cands[0][key], fetchedMs: cands[0].fetched_at_ms || null };
+    }
+    const win = (RL_MAX && RL_MAX[key]) || (RL_LIVE && RL_LIVE[key]) || null;
+    const fetchedMs = (RL_MAX && RL_MAX.fetched_at_ms) || (RL_LIVE && RL_LIVE.fetched_at_ms) || null;
+    return { win, fetchedMs };
+  }
+  function _rlReset(key) {
+    const p = _rlPick(key).win;
+    if (p && p.resets_at_ms) return p.resets_at_ms;
+    for (const s of [RL_MAX, RL_LIVE]) if (s && s[key] && s[key].resets_at_ms) return s[key].resets_at_ms;
+    return null;
+  }
+  function rlFiveHour() { return _rlPick('five_hour').win; }
+  function rlSevenDay() { return _rlPick('seven_day').win; }
+  let wkResetMsLive = _rlReset('seven_day');
+  let h5ResetMsLive = _rlReset('five_hour');
 
   function renderLiveBadges() {
     function ageStr(fetched_ms) {
@@ -3958,12 +3977,12 @@
     const fh = rlFiveHour();
     if (fh && fh.utilization != null) {
       const b = document.getElementById('p5h-live-badge');
-      if (b) { b.textContent = `${ageStr(RL_MAX && RL_MAX.fetched_at_ms)} · ${fh.utilization.toFixed(0)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageStr(_rlPick('five_hour').fetchedMs)} · ${fh.utilization.toFixed(0)}%`; b.hidden = false; }
     }
     const sd = rlSevenDay();
     if (sd && sd.utilization != null) {
       const b = document.getElementById('pw-live-badge');
-      if (b) { b.textContent = `${ageStr(RL_MAX && RL_MAX.fetched_at_ms)} · ${sd.utilization.toFixed(0)}%`; b.hidden = false; }
+      if (b) { b.textContent = `${ageStr(_rlPick('seven_day').fetchedMs)} · ${sd.utilization.toFixed(0)}%`; b.hidden = false; }
     }
     // Monthly badge stays on RL_LIVE (enterprise extra_usage pool).
     if (RL_LIVE && RL_LIVE.monthly && RL_LIVE.monthly.utilization != null) {
