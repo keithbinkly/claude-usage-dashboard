@@ -7793,6 +7793,9 @@
 
     // ─── Heaviest sessions table — client-side aggregation so the
     // user can switch time range (1h / 1d / 7d) without a re-fetch.
+    // Sample/demo builds are static and can sit untouched for weeks; for
+    // those, the range buttons are presentation-only and the table uses the
+    // full synthetic dataset so the heaviest-session pane never goes blank.
     // Keeps the same shape Python's aggregate_sessions() produces.
     const sessHost = document.getElementById('session-table-host');
     const sessLabel = document.getElementById('sessions-range-label');
@@ -7820,7 +7823,7 @@
     // matter — includes monitor + consider + compact-now + reset tiers.
     const HEAVY_THRESHOLD = 200_000;
     function aggregateSessionsJS(lookbackMs) {
-      const cutoff = now - lookbackMs;
+      const cutoff = DATA.is_sample ? -Infinity : now - lookbackMs;
       const buckets = new Map();
       for (const t of turns) {
         if (t.ts < cutoff) continue;

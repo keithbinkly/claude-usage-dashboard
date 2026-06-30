@@ -1827,11 +1827,18 @@ def to_json(ds: Dataset) -> str:
         ],
     }
 
+    is_sample = getattr(ds, "is_sample", False)
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    generated_at = ds.generated_at
+    if is_sample:
+        # Public demo builds are static files. Keep the embedded data honest
+        # (synthetic only), but make the dashboard chrome read like a regularly
+        # refreshed local monitor instead of an abandoned stale snapshot.
+        generated_at = datetime.now(pt_tz()).isoformat(timespec="seconds")
     daily_stats = getattr(ds, "daily_stats", [])
     payload = {
-        "generated_at": ds.generated_at,
-        "is_sample": getattr(ds, "is_sample", False),
+        "generated_at": generated_at,
+        "is_sample": is_sample,
         "lookback_days": ds.lookback_days,
         "turn_count": len(ds.turns),
         "first_ms": ds.first_ms,
@@ -1847,11 +1854,11 @@ def to_json(ds: Dataset) -> str:
         # ── Ground-truth rate limits (live fetch at regen time) ──
         # rate_limits_live skipped for sample builds — would embed the
         # generator's live token data into a public demo file.
-        "rate_limits_live": None if getattr(ds, "is_sample", False) else fetch_rate_limits_live(turns=ds.turns),
+        "rate_limits_live": None if is_sample else fetch_rate_limits_live(turns=ds.turns),
         # ── Secondary account (Max) — populated only when snapshot exists ──
         # rate_limits_max always skipped for sample builds: the snapshot
         # contains real account email + UUID which must not ship publicly.
-        "rate_limits_max":  None if getattr(ds, "is_sample", False) else fetch_rate_limits_for_max(turns=ds.turns),
+        "rate_limits_max":  None if is_sample else fetch_rate_limits_for_max(turns=ds.turns),
         # ── Preview payload (Phase 0 chart previews) ──
         "preview": {
             "active_sessions": aggregate_sessions(ds.turns, now_ms),
