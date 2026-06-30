@@ -2,7 +2,7 @@
 
 A self-contained Claude usage dashboard for Claude Code Max users — tracks pacing, heavy sessions, context depth, and historical trends. One HTML file, runs offline, no backend required.
 
-**[Live demo (simulated data) →](https://data-centered.com/tools/claude-usage-monitor/dashboard.html)**
+**[Live demo (simulated data) →](https://data-centered.com/tools/claude-usage-monitor/claude-usage-dashboard-wide.html)**
 
 <img width="800" height="448" alt="claude-usage-demo-vid2x" src="https://github.com/user-attachments/assets/1b923ca8-bbb5-4777-9588-bb9f340abe27" />
 
